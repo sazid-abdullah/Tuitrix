@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f1115" />
+      <stop offset="100%" stop-color="#1a1c23" />
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3ecf8e" />
+      <stop offset="100%" stop-color="#5b8cff" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bgGradient)" />
+
+  <g transform="translate(100, 150)">
+    <text x="0" y="0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="80" font-weight="bold" fill="white">Tuitrix</text>
+    <text x="0" y="80" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="40" font-weight="600" fill="url(#textGradient)">#1 Smart Tuition, Batch &amp; AI Exam Manager</text>
+
+    <g transform="translate(0, 180)">
+      <circle cx="15" cy="-10" r="8" fill="#3ecf8e" />
+      <text x="40" y="0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" fill="#a1a1aa">Track 12-Class Cycles</text>
+
+      <circle cx="15" cy="50" r="8" fill="#3ecf8e" />
+      <text x="40" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" fill="#a1a1aa">1-Tap Batch Attendance</text>
+
+      <circle cx="15" cy="110" r="8" fill="#3ecf8e" />
+      <text x="40" y="120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" fill="#a1a1aa">AI Exam PDFs</text>
+
+      <circle cx="15" cy="170" r="8" fill="#3ecf8e" />
+      <text x="40" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" fill="#a1a1aa">bKash/Nagad Ready</text>
+    </g>
+  </g>
+
+  <g transform="translate(900, 215)">
+    <circle cx="100" cy="100" r="150" fill="#3ecf8e" opacity="0.1" />
+    <circle cx="100" cy="100" r="100" fill="#3ecf8e" opacity="0.2" />
+    <path d="M50,100 L90,140 L160,60" fill="none" stroke="#3ecf8e" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
