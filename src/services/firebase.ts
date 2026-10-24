@@ -1,7 +1,8 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, Auth } from 'firebase/auth';
 import { getAnalytics, Analytics } from "firebase/analytics";
-import { getFirestore, Firestore, doc, setDoc, updateDoc, collection, getDocs, getDoc, query, orderBy, writeBatch } from "firebase/firestore";
+import { getFirestore, Firestore, doc, setDoc, updateDoc, collection, getDocs, getDoc, query, orderBy, writeBatch, deleteDoc } from "firebase/firestore";
+import { deleteUser } from "firebase/auth";
 import { TrxUpgradeRequest, PricingConfig } from '../types';
 
 // Your web app's Firebase configuration
@@ -213,6 +214,35 @@ export const resetUserPassword = async (email: string): Promise<void> => {
     return Promise.resolve();
   }
   return sendPasswordResetEmail(auth, email.trim());
+};
+
+export const deleteTutorAccountAndData = async (uid: string): Promise<void> => {
+  if (!db || !auth?.currentUser) return;
+
+  // Attempt to delete cloud data, ignoring failures if documents don't exist
+  const paths = [
+    `tutors/${uid}/data/appState`,
+    `tutors/${uid}`,
+    `users/${uid}/data/appState`,
+  ];
+
+  for (const path of paths) {
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (e) {
+      console.warn(`Failed to delete ${path}:`, e);
+    }
+  }
+
+  // Delete the Firebase Auth user account
+  try {
+    await deleteUser(auth.currentUser);
+  } catch (e: any) {
+    if (e.code === 'auth/requires-recent-login') {
+      throw new Error('auth/requires-recent-login');
+    }
+    throw e;
+  }
 };
 
 export { app, auth, db, analytics, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail };

@@ -759,6 +759,26 @@ export const SettingsView: React.FC = () => {
           </form>
         </div>
 
+        {/* Legal, Privacy & Security */}
+        <div className="card">
+          <h2>⚖️ Legal, Privacy & Security</h2>
+          <p className="muted small" style={{ marginBottom: '12px' }}>
+            Review our public policies or copy the link to share.
+          </p>
+          <div className="actions" style={{ marginBottom: '12px' }}>
+            <button className="btn outline" onClick={() => window.location.href = '?legal=privacy'}>Privacy Policy</button>
+            <button className="btn outline" onClick={() => window.location.href = '?legal=terms'}>Terms of Service</button>
+            <button className="btn outline" onClick={() => window.location.href = '?legal=billing'}>Billing & Refund</button>
+            <button className="btn outline" onClick={() => window.location.href = '?legal=security'}>Security</button>
+          </div>
+          <button className="btn" onClick={() => {
+            navigator.clipboard.writeText(`${window.location.origin}/?legal=privacy`);
+            toast('Privacy Policy link copied', 'success');
+          }}>
+            Copy Public Privacy Policy Link
+          </button>
+        </div>
+
         {/* Backup and Data */}
         <div className="card">
           <h2>Backup & Storage</h2>
@@ -798,6 +818,39 @@ export const SettingsView: React.FC = () => {
             />{' '}
             Include AI keys in backup file
           </label>
+        </div>
+
+        {/* Data Management / Account Deletion */}
+        <div className="card">
+          <h2>Data Management</h2>
+          <p className="muted small" style={{ marginBottom: '12px' }}>
+            Permanently delete your account and all associated cloud data. This action cannot be undone.
+          </p>
+          <button className="btn danger" onClick={async () => {
+            const confirmed = window.confirm("Are you sure you want to permanently delete your account and all data? This cannot be undone.");
+            if (confirmed) {
+              const { auth } = await import('../services/firebase');
+              if (auth?.currentUser) {
+                const { deleteTutorAccountAndData } = await import('../services/firebase');
+                try {
+                  await deleteTutorAccountAndData(auth.currentUser.uid);
+                  eraseAllData();
+                  toast('Account and data deleted successfully', 'success');
+                } catch (e: any) {
+                  if (e.message && e.message.includes('requires-recent-login')) {
+                    alert('Please log out and log back in to verify your identity before deleting your account.');
+                  } else {
+                    alert(`Error deleting account: ${e.message}`);
+                  }
+                }
+              } else {
+                eraseAllData();
+                toast('Local data erased successfully', 'success');
+              }
+            }
+          }}>
+            🗑️ Delete Account & All Data
+          </button>
         </div>
 
         {/* Android App & Share */}

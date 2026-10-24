@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from './store/context';
 import { Navbar } from './components/Navbar';
+import { LegalModal } from './components/LegalModal';
 import { ToastContainer } from './components/ToastContainer';
 import { StudentModal } from './components/StudentModal';
 import { ContractModal } from './components/ContractModal';
@@ -126,11 +127,17 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const [showLanding, setShowLanding] = useState<boolean>(false);
+  const [legalTab, setLegalTab] = useState<'privacy' | 'terms' | 'billing' | 'security' | null>(null);
 
   useEffect(() => {
     const isFirstTime = localStorage.getItem('tuitrix_entered_app') !== 'true';
     const query = new URLSearchParams(window.location.search);
     const isLandingQuery = query.get('landing') === '1' || window.location.hash.includes('?landing=1');
+    const legalQuery = query.get('legal');
+
+    if (legalQuery && ['privacy', 'terms', 'billing', 'security'].includes(legalQuery)) {
+      setLegalTab(legalQuery as any);
+    }
 
     if (isLandingQuery || (!isAuthenticated && isFirstTime)) {
       setShowLanding(true);
@@ -180,6 +187,7 @@ export const App: React.FC = () => {
           }}
         />
         <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+        <LegalModal isOpen={!!legalTab} initialTab={legalTab || 'privacy'} onClose={() => setLegalTab(null)} />
       </>
     );
   }
@@ -191,6 +199,7 @@ export const App: React.FC = () => {
         <main id="view" tabIndex={-1}></main>
         <OnboardingModal isOpen={true} />
         <ToastContainer />
+        <LegalModal isOpen={!!legalTab} initialTab={legalTab || 'privacy'} onClose={() => setLegalTab(null)} />
       </>
     );
   }
@@ -443,6 +452,12 @@ export const App: React.FC = () => {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
+      />
+
+      <LegalModal
+        isOpen={!!legalTab}
+        initialTab={legalTab || 'privacy'}
+        onClose={() => setLegalTab(null)}
       />
 
       <ToastContainer />

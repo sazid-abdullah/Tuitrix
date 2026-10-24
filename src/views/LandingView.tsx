@@ -286,9 +286,13 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
       <footer className="landing-footer">
         <div className="footer-content">
           <div className="footer-brand">Tuitrix &copy; {new Date().getFullYear()}</div>
-          <div className="footer-links">
+          <div className="footer-links" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
             <button onClick={onEnterApp}>Launch App</button>
             <button onClick={onSignIn}>Sign In</button>
+            <button onClick={() => window.location.href = '?legal=privacy'}>Privacy Policy</button>
+            <button onClick={() => window.location.href = '?legal=terms'}>Terms of Service</button>
+            <button onClick={() => window.location.href = '?legal=billing'}>Refund Policy</button>
+            <button onClick={() => window.location.href = '?legal=security'}>Security</button>
           </div>
         </div>
       </footer>
