@@ -42,8 +42,13 @@ export const App: React.FC = () => {
     const [path, queryString] = h.split('?');
     const parts = path.split('/').filter(Boolean);
     const r = parts[0] || 'home';
+    const validRoutes = ['home', 'students', 'student', 'classes', 'money', 'ai', 'exam', 'result', 'settings', 'landing'];
+    let matchedRoute = validRoutes.includes(r) ? r : 'home';
     const param = parts[1] || (queryString ? `?${queryString}` : '');
-    setRoute(r);
+    if (matchedRoute === 'home' && r !== 'home') {
+       window.location.hash = '#/home';
+    }
+    setRoute(matchedRoute);
     setRouteParam(param);
   };
 
