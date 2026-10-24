@@ -853,6 +853,25 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
 
+
+        {/* Help, Support & Feedback */}
+        <div className="card">
+          <h2>💬 Help, Support & Feedback</h2>
+          <p className="muted small" style={{ marginBottom: '12px' }}>
+            Need help configuring your batch, resolving billing issues, or reporting a bug? We are here to assist.
+          </p>
+          <div className="actions">
+            <a href={`mailto:abdullahsazid109@gmail.com?subject=Tuitrix Support Request&body=App Version: 1.0.0%0D%0APlan: ${isProUser ? "Pro" : "Free"}%0D%0ADevice: ${navigator.userAgent}`} className="btn primary" style={{ textDecoration: 'none', textAlign: 'center' }}>
+              📧 Email Support / Report Issue
+            </a>
+            <button className="btn" onClick={() => {
+              alert("Billing & Upgrade Help:\n\nIf you paid via bKash/Nagad and submitted your TrxID but are not seeing Pro features, please wait 15-30 minutes for manual verification.\n\nFor immediate assistance, please use the Email Support option.");
+            }}>
+              💬 Billing & Upgrade Help
+            </button>
+          </div>
+        </div>
+
         {/* Android App & Share */}
         <div className="card">
           <h2>📲 Android App & Share QR Code</h2>

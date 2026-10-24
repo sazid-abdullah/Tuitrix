@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/context';
 import { todayISO, fmtDate, fmtTime, monthKey, daysBetween, WEEKDAYS } from '../utils/date';
 import { contractStatus, isDueSoon, describeNextDue } from '../store/contracts';
@@ -40,6 +40,15 @@ export function statusBadge(status: string) {
   return <span className="badge green">Taught</span>;
 }
 
+
+export function computeChecklistProgress(state: any) {
+  const hasStudent = state.students?.length > 0;
+  const hasLesson = state.lessons?.length > 0;
+  const hasAI = state.savedResources?.length > 0;
+  const hasSettings = !!state.settings?.tutorName;
+  return { hasStudent, hasLesson, hasAI, hasSettings };
+}
+
 export const HomeView: React.FC<HomeViewProps> = ({
   onNavigate,
   onOpenLessonModal,
@@ -47,6 +56,25 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenStudentModal,
 }) => {
   const { state, money, studentName, saveLesson, toast, loadDemoData } = useStore();
+
+  const [showChecklist, setShowChecklist] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem('tuitrix_onboarding_checklist_dismissed')) {
+      setShowChecklist(true);
+    }
+  }, []);
+
+  const hasStudent = state.students.length > 0;
+  const hasLesson = state.lessons.length > 0;
+  const hasAI = state.savedResources && state.savedResources.length > 0;
+  const hasSettings = !!state.settings.tutorName;
+
+  const handleDismissChecklist = () => {
+    localStorage.setItem('tuitrix_onboarding_checklist_dismissed', 'true');
+    setShowChecklist(false);
+  };
+
   const today = todayISO();
   const dow = new Date().getDay();
   const greetName = state.settings.tutorName
@@ -56,6 +84,43 @@ export const HomeView: React.FC<HomeViewProps> = ({
   if (!state.students.length) {
     return (
       <div>
+
+      {showChecklist && (
+        <div className="card" style={{ marginBottom: '20px', border: '2px solid var(--accent)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <h2 style={{ color: 'var(--accent)' }}>🚀 Getting Started with Tuitrix</h2>
+            <button className="btn outline small" onClick={handleDismissChecklist}>Dismiss</button>
+          </div>
+          <p className="muted small" style={{ marginBottom: '12px' }}>Complete these quick steps to set up your tuition management.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasStudent ? 'var(--green)' : 'var(--muted)' }}>{hasStudent ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasStudent ? 'line-through' : 'none', color: hasStudent ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 1:</b> Add your first Student or Coaching Batch (Students tab)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasLesson ? 'var(--green)' : 'var(--muted)' }}>{hasLesson ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasLesson ? 'line-through' : 'none', color: hasLesson ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 2:</b> Log your first Class Attendance (Classes tab)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasAI ? 'var(--green)' : 'var(--muted)' }}>{hasAI ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasAI ? 'line-through' : 'none', color: hasAI ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 3:</b> Generate an AI Exam or Lecture Sheet (AI tab)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasSettings ? 'var(--green)' : 'var(--muted)' }}>{hasSettings ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasSettings ? 'line-through' : 'none', color: hasSettings ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 4:</b> Customize your Tutor Brand Header (Settings tab)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
         <div className="page-head">
           <div>
             <h1>Welcome{greetName}</h1>
@@ -181,7 +246,44 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   return (
     <div>
-      <div className="page-head">
+
+      {showChecklist && (
+        <div className="card" style={{ marginBottom: '20px', border: '2px solid var(--accent)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <h2 style={{ color: 'var(--accent)' }}>🚀 Getting Started with Tuitrix</h2>
+            <button className="btn outline small" onClick={handleDismissChecklist}>Dismiss</button>
+          </div>
+          <p className="muted small" style={{ marginBottom: '12px' }}>Complete these quick steps to set up your tuition management.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasStudent ? 'var(--green)' : 'var(--muted)' }}>{hasStudent ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasStudent ? 'line-through' : 'none', color: hasStudent ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 1:</b> Add your first Student or Coaching Batch (Students tab)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasLesson ? 'var(--green)' : 'var(--muted)' }}>{hasLesson ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasLesson ? 'line-through' : 'none', color: hasLesson ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 2:</b> Log your first Class Attendance (Classes tab)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasAI ? 'var(--green)' : 'var(--muted)' }}>{hasAI ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasAI ? 'line-through' : 'none', color: hasAI ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 3:</b> Generate an AI Exam or Lecture Sheet (AI tab)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem', color: hasSettings ? 'var(--green)' : 'var(--muted)' }}>{hasSettings ? '✅' : '⬜'}</span>
+              <span style={{ textDecoration: hasSettings ? 'line-through' : 'none', color: hasSettings ? 'var(--muted)' : 'inherit' }}>
+                <b>Step 4:</b> Customize your Tutor Brand Header (Settings tab)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+        <div className="page-head">
         <div>
           <h1>Hello{greetName}</h1>
           <div className="sub">
