@@ -8,6 +8,7 @@ import { isOwnerEmail } from '../utils/auth';
 import { TrxUpgradeRequest, PricingConfig } from '../types';
 import { requestNotificationPermission, sendLocalReminderNotification, getDueRemindersSummary } from '../services/notifications';
 import { ApkShareModal } from '../components/ApkShareModal';
+import { isProUser } from '../utils/tierLimits';
 
 const CURRENCIES = ['৳', '₹', 'Rs ', '$', '£', '€', 'RM ', 'SAR '];
 
@@ -24,7 +25,10 @@ export const SettingsView: React.FC = () => {
     importBackup,
     downloadFile,
     toast,
+    user,
   } = useStore();
+
+  const isPro = isProUser(billingState, user?.email);
 
   const [tutorName, setTutorName] = useState(state.settings.tutorName || '');
   const [credentials, setCredentials] = useState(state.profile?.credentials || '');
@@ -861,7 +865,7 @@ export const SettingsView: React.FC = () => {
             Need help configuring your batch, resolving billing issues, or reporting a bug? We are here to assist.
           </p>
           <div className="actions">
-            <a href={`mailto:abdullahsazid109@gmail.com?subject=Tuitrix Support Request&body=App Version: 1.0.0%0D%0APlan: ${isProUser ? "Pro" : "Free"}%0D%0ADevice: ${navigator.userAgent}`} className="btn primary" style={{ textDecoration: 'none', textAlign: 'center' }}>
+            <a href={`mailto:abdullahsazid109@gmail.com?subject=Tuitrix Support Request&body=App Version: 1.0.0%0D%0APlan: ${isPro ? "Pro" : "Free"}%0D%0ADevice: ${navigator.userAgent}`} className="btn primary" style={{ textDecoration: 'none', textAlign: 'center' }}>
               📧 Email Support / Report Issue
             </a>
             <button className="btn" onClick={() => {

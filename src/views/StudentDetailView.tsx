@@ -16,6 +16,7 @@ interface StudentDetailViewProps {
   onAddContract: (studentId: string) => void;
   onEditContract: (contract: Contract) => void;
   onLogLesson: (opts: { studentId: string; lesson?: Lesson }) => void;
+  onShowReceipt?: (payment: Payment) => void;
   onRecordPayment: (opts: { studentId: string; contractId?: string; payment?: Payment }) => void;
   onUploadPaper: (studentId: string) => void;
 }
@@ -27,6 +28,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   onAddContract,
   onEditContract,
   onLogLesson,
+  onShowReceipt,
   onRecordPayment,
   onUploadPaper,
 }) => {
@@ -699,6 +701,14 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                         {p.note ? ` · ${p.note}` : ''}
                       </div>
                     </div>
+                    {onShowReceipt && (
+                      <button
+                        className="btn sm ghost"
+                        onClick={() => onShowReceipt(p)}
+                      >
+                        🧾 Receipt
+                      </button>
+                    )}
                     <button
                       className="btn sm ghost"
                       onClick={() =>

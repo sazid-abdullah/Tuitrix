@@ -17,6 +17,8 @@ export interface Batch {
   subjects?: string[];
   studentIds: string[];
   schedule?: ScheduleSlot[];
+  scheduleDays?: string[];
+  scheduleTime?: string;
   defaultFee?: number;
   defaultCycleType?: CycleType;
   defaultCycleLength?: number;
@@ -49,6 +51,8 @@ export interface Student {
   address?: string;
   notes?: string;
   schedule?: ScheduleSlot[];
+  scheduleDays?: string[];
+  scheduleTime?: string;
   active?: boolean;
   createdAt?: string;
   batchId?: string | null;
@@ -94,7 +98,7 @@ export interface Payment {
   amount: number;
   discountApplied?: number;
   promoCodeUsed?: string;
-  planTerm?: 'monthly' | 'yearly';
+  planTerm?: string;
   date: string; // YYYY-MM-DD
   method?: string;
   note?: string;

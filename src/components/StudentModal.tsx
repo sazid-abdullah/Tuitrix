@@ -32,6 +32,10 @@ export const StudentModal: React.FC<StudentModalProps> = ({
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([
     { day: 6, time: '17:00', duration: 60 },
   ]);
+  const [scheduleDays, setScheduleDays] = useState<string[]>([]);
+  const [scheduleTime, setScheduleTime] = useState('');
+
+  const BANGLA_DAYS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   useEffect(() => {
     if (student) {
@@ -45,6 +49,8 @@ export const StudentModal: React.FC<StudentModalProps> = ({
       setAddress(student.address || '');
       setNotes(student.notes || '');
       setSchedule(student.schedule && student.schedule.length ? student.schedule : []);
+      setScheduleDays(student.scheduleDays || []);
+      setScheduleTime(student.scheduleTime || '');
     } else {
       setName('');
       setGrade('');
@@ -56,8 +62,18 @@ export const StudentModal: React.FC<StudentModalProps> = ({
       setAddress('');
       setNotes('');
       setSchedule([{ day: 6, time: '17:00', duration: 60 }]);
+      setScheduleDays([]);
+      setScheduleTime('');
     }
   }, [student, isOpen]);
+
+  const toggleDay = (day: string) => {
+    if (scheduleDays.includes(day)) {
+      setScheduleDays(scheduleDays.filter(d => d !== day));
+    } else {
+      setScheduleDays([...scheduleDays, day]);
+    }
+  };
 
   const handleAddSlot = () => {
     const last = schedule[schedule.length - 1];
@@ -96,6 +112,8 @@ export const StudentModal: React.FC<StudentModalProps> = ({
       address: address.trim(),
       notes: notes.trim(),
       schedule,
+      scheduleDays,
+      scheduleTime,
       active: student?.active !== false,
     };
 
@@ -197,7 +215,33 @@ export const StudentModal: React.FC<StudentModalProps> = ({
 
         <div className="field">
           <span className="muted small" style={{ fontWeight: 500 }}>
-            Weekly schedule (day · time · minutes)
+            Weekly Routine (Sat-Fri)
+          </span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px', marginBottom: '10px' }}>
+            {BANGLA_DAYS.map(day => (
+              <label key={day} className="check" style={{ marginRight: '10px' }}>
+                <input
+                  type="checkbox"
+                  checked={scheduleDays.includes(day)}
+                  onChange={() => toggleDay(day)}
+                />{' '}
+                {day}
+              </label>
+            ))}
+          </div>
+          <label className="field" style={{ marginTop: '10px' }}>
+            Schedule Time
+            <input
+              type="time"
+              value={scheduleTime}
+              onChange={e => setScheduleTime(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="field">
+          <span className="muted small" style={{ fontWeight: 500 }}>
+            Legacy schedule (day · time · minutes)
           </span>
           <div className="grid" style={{ gap: '8px', marginTop: '6px' }}>
             {schedule.map((slot, index) => (

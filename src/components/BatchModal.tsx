@@ -24,6 +24,10 @@ export const BatchModal: React.FC<BatchModalProps> = ({
   const [studentIds, setStudentIds] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [active, setActive] = useState(true);
+  const [scheduleDays, setScheduleDays] = useState<string[]>([]);
+  const [scheduleTime, setScheduleTime] = useState('');
+
+  const BANGLA_DAYS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   useEffect(() => {
     if (batch) {
@@ -34,6 +38,8 @@ export const BatchModal: React.FC<BatchModalProps> = ({
       setStudentIds(batch.studentIds || []);
       setNotes(batch.notes || '');
       setActive(batch.active !== false);
+      setScheduleDays(batch.scheduleDays || []);
+      setScheduleTime(batch.scheduleTime || '');
     } else {
       setName('');
       setGrade('');
@@ -42,8 +48,18 @@ export const BatchModal: React.FC<BatchModalProps> = ({
       setStudentIds([]);
       setNotes('');
       setActive(true);
+      setScheduleDays([]);
+      setScheduleTime('');
     }
   }, [batch, isOpen]);
+
+  const toggleDay = (day: string) => {
+    if (scheduleDays.includes(day)) {
+      setScheduleDays(scheduleDays.filter(d => d !== day));
+    } else {
+      setScheduleDays([...scheduleDays, day]);
+    }
+  };
 
   const activeStudents = state.students.filter(s => s.active !== false);
 
@@ -62,6 +78,8 @@ export const BatchModal: React.FC<BatchModalProps> = ({
         .filter(Boolean),
       studentIds,
       notes: notes.trim() || undefined,
+      scheduleDays,
+      scheduleTime,
       active,
     });
 
@@ -128,6 +146,32 @@ export const BatchModal: React.FC<BatchModalProps> = ({
             placeholder="e.g. Physics, Math"
           />
         </label>
+
+        <div className="field">
+          <span className="muted small" style={{ fontWeight: 500 }}>
+            Weekly Routine (Sat-Fri)
+          </span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px', marginBottom: '10px' }}>
+            {BANGLA_DAYS.map(day => (
+              <label key={day} className="check" style={{ marginRight: '10px' }}>
+                <input
+                  type="checkbox"
+                  checked={scheduleDays.includes(day)}
+                  onChange={() => toggleDay(day)}
+                />{' '}
+                {day}
+              </label>
+            ))}
+          </div>
+          <label className="field" style={{ marginTop: '10px' }}>
+            Schedule Time
+            <input
+              type="time"
+              value={scheduleTime}
+              onChange={e => setScheduleTime(e.target.value)}
+            />
+          </label>
+        </div>
 
         <div className="field">
           <span className="muted small" style={{ fontWeight: 500 }}>
