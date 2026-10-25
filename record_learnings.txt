@@ -2,3 +2,7 @@
 - Added a frontend check to prevent standard users from reading the global `upgrade_requests` collection (`firebase.ts`).
 - Created a mandatory `OnboardingModal` flow in `App.tsx` that blocks access to the dashboard until the user's `brandTitle` is set.
 - Ensured state hydration from Firestore completes (`isStateLoaded` flag in `StoreProvider`) before conditionally rendering the `OnboardingModal` in `App.tsx` to prevent returning users with slow connections from encountering it.
+Learnings from Phase 9:
+- When calling `isProUser`, always make sure to pass `user?.email` (so that Owner bypass logic correctly overrides free-tier quotas). The `user` object needs to be accurately destructured and maintained inside context state.
+- Ensure any added property to an interface (like `guardianPhone`) matches throughout the codebase to avoid TS compilation errors.
+- Always use `.some` or fallback safely (`foo || 'fallback'`) to handle missing properties cleanly across older/imported profiles.

@@ -21,6 +21,14 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
   const [studentFilter, setStudentFilter] = useState(initialStudentFilter);
   const [batchFilter, setBatchFilter] = useState(initialBatchFilter);
   const [monthFilter, setMonthFilter] = useState<string>(monthKey(todayISO()));
+  const [viewMode, setViewMode] = useState<'log' | 'routine'>('log');
+
+  const BANGLA_DAYS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const todayDayIndex = new Date().getDay();
+  // JS getDay(): 0 = Sun, 1 = Mon, ..., 6 = Sat
+  // BANGLA_DAYS index: 0 = Sat, 1 = Sun, ..., 6 = Fri
+  const jsDayToBanglaIndex: Record<number, number> = { 6: 0, 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 };
+  const todayBanglaIndex = jsDayToBanglaIndex[todayDayIndex];
 
   const filtered = state.lessons
     .filter(l => !studentFilter || l.studentId === studentFilter)
@@ -42,8 +50,8 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
     <div>
       <div className="page-head">
         <div>
-          <h1>Class log</h1>
-          <div className="sub">What you taught, day by day</div>
+          <h1>Classes</h1>
+          <div className="sub">Manage routines and logs</div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
@@ -60,6 +68,66 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
           </button>
         </div>
       </div>
+
+      <div className="toolbar" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '16px' }}>
+        <div className="seg">
+          <button className={viewMode === 'log' ? 'active' : ''} onClick={() => setViewMode('log')}>📋 Class Log</button>
+          <button className={viewMode === 'routine' ? 'active' : ''} onClick={() => setViewMode('routine')}>📅 Weekly Routine</button>
+        </div>
+      </div>
+
+      {viewMode === 'routine' ? (
+        <div className="routine-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+          {BANGLA_DAYS.map((day, i) => {
+            const isToday = i === todayBanglaIndex;
+            const scheduledItems: { id: string; name: string; type: 'student' | 'batch'; time: string }[] = [];
+
+            state.students.filter(s => s.active !== false).forEach(s => {
+              if (s.scheduleDays?.includes(day)) {
+                scheduledItems.push({ id: s.id, name: s.name, type: 'student', time: s.scheduleTime || '' });
+              }
+            });
+
+            state.batches?.filter(b => b.active !== false).forEach(b => {
+              if (b.scheduleDays?.includes(day)) {
+                scheduledItems.push({ id: b.id, name: b.name, type: 'batch', time: b.scheduleTime || '' });
+              }
+            });
+
+            scheduledItems.sort((a, b) => a.time.localeCompare(b.time));
+
+            return (
+              <div key={day} className={`card ${isToday ? 'highlight-today' : ''}`} style={isToday ? { border: '2px solid var(--primary)' } : {}}>
+                <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '1.1em', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{day}</span>
+                  {isToday && <span style={{ color: 'var(--primary)', fontSize: '0.8em', padding: '2px 6px', background: 'var(--bg)', borderRadius: '4px' }}>Today</span>}
+                </div>
+                {scheduledItems.length === 0 ? (
+                  <div className="muted small">No classes</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {scheduledItems.map(item => (
+                      <div key={item.id + item.type} style={{ padding: '8px', background: 'var(--bg)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{item.name} {item.type === 'batch' && <span className="badge">Batch</span>}</div>
+                          <div className="muted small">{item.time ? fmtTime(item.time) : 'Time not set'}</div>
+                        </div>
+                        <button
+                          className="btn sm ghost"
+                          onClick={() => item.type === 'batch' ? onLogLesson({ batchId: item.id }) : onLogLesson({ studentId: item.id })}
+                        >
+                          ✅
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
 
       <div className="toolbar">
         <select
@@ -179,6 +247,8 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
             ))}
           </div>
         ))
+      )}
+      </>
       )}
     </div>
   );
