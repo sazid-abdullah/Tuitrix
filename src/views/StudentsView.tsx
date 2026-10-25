@@ -8,6 +8,7 @@ import { Student } from '../types';
 interface StudentsViewProps {
   onNavigate: (route: string, param?: string) => void;
   onOpenStudentModal: () => void;
+  onOpenBulkStudentModal?: () => void;
 }
 
 export function scheduleSummary(s: Student): string {
@@ -30,6 +31,7 @@ import { BatchFeeModal } from '../components/BatchFeeModal';
 export const StudentsView: React.FC<StudentsViewProps> = ({
   onNavigate,
   onOpenStudentModal,
+  onOpenBulkStudentModal,
 }) => {
   const { state, money } = useStore();
   const [search, setSearch] = useState('');
@@ -82,9 +84,16 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         </div>
         <div>
           {viewMode === 'individual' ? (
-            <button className="btn primary" onClick={onOpenStudentModal}>
-              + Add student
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {onOpenBulkStudentModal && (
+                <button className="btn ghost" onClick={onOpenBulkStudentModal}>
+                  ⚡ Bulk Add
+                </button>
+              )}
+              <button className="btn primary" onClick={onOpenStudentModal}>
+                + Add student
+              </button>
+            </div>
           ) : (
             <button className="btn primary" onClick={() => { setEditingBatch(null); setBatchModalOpen(true); }}>
               + New Batch

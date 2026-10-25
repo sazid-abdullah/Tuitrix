@@ -9,6 +9,7 @@ import { isProUser } from '../utils/tierLimits';
 interface MoneyViewProps {
   onNavigate: (route: string, param?: string) => void;
   onRecordPayment: (opts?: { studentId?: string; contractId?: string; payment?: Payment }) => void;
+  onShowReceipt?: (payment: Payment) => void;
   onAddExpense: (expense?: Expense) => void;
   onAddGoal: (goal?: Goal) => void;
   onDepositGoal: (goalId: string) => void;
@@ -24,6 +25,7 @@ const MONEY_QUESTIONS = [
 export const MoneyView: React.FC<MoneyViewProps> = ({
   onNavigate,
   onRecordPayment,
+  onShowReceipt,
   onAddExpense,
   onAddGoal,
   onDepositGoal,
@@ -574,6 +576,14 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                   <span className={`nowrap ${t.type === 'income' ? 'pos' : 'neg'}`}>
                     {t.type === 'income' ? `+${money(t.amount)}` : `-${money(Math.abs(t.amount))}`}
                   </span>
+                  {t.type === 'income' && t.payment && onShowReceipt && (
+                    <button
+                      className="btn sm ghost"
+                      onClick={() => onShowReceipt(t.payment!)}
+                    >
+                      🧾 Receipt
+                    </button>
+                  )}
                   <button
                     className="btn sm ghost"
                     onClick={() =>

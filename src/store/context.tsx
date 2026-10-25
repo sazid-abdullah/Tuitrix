@@ -122,6 +122,7 @@ interface StoreContextType {
   importBackup: (text: string) => void;
   downloadFile: (name: string, content: string, type?: string) => void;
   isStateLoaded: boolean;
+  user: { email: string | null } | null;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -147,6 +148,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | undefined>();
+  const [user, setUser] = useState<{ email: string | null } | null>(null);
   const isMigratingRef = useRef(false);
   const authLoadedRef = useRef(false);
 
@@ -156,6 +158,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     let unsubscribe: () => void = () => {};
     if (auth) { unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user ? { email: user.email } : null);
       if (user) {
         const isOwner = isOwnerEmail(user.email);
 
@@ -868,6 +871,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       importBackup,
       downloadFile,
       isStateLoaded,
+      user
     }}>
       {children}
     </StoreContext.Provider>

@@ -7,11 +7,13 @@ import { StudentModal } from './components/StudentModal';
 import { ContractModal } from './components/ContractModal';
 import { LessonModal } from './components/LessonModal';
 import { PaymentModal } from './components/PaymentModal';
+import { PaymentReceiptModal } from './components/PaymentReceiptModal';
 import { ExpenseModal } from './components/ExpenseModal';
 import { GoalModal } from './components/GoalModal';
 import { GoalDepositModal } from './components/GoalDepositModal';
 import { UploadPaperModal } from './components/UploadPaperModal';
 import { ImportDocModal } from './components/ImportDocModal';
+import { BulkStudentModal } from './components/BulkStudentModal';
 import { AuthModal } from './components/AuthModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { auth } from './services/firebase';
@@ -108,6 +110,8 @@ export const App: React.FC = () => {
     contractId?: string;
   }>({});
 
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
@@ -121,6 +125,7 @@ export const App: React.FC = () => {
   const [uploadStudentId, setUploadStudentId] = useState('');
 
   const [importDocModalOpen, setImportDocModalOpen] = useState(false);
+  const [bulkStudentModalOpen, setBulkStudentModalOpen] = useState(false);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
@@ -248,6 +253,7 @@ export const App: React.FC = () => {
         {route === 'students' && (
           <StudentsView
             onNavigate={navigate}
+            onOpenBulkStudentModal={() => setBulkStudentModalOpen(true)}
             onOpenStudentModal={() => {
               setSelectedStudent(null);
               setStudentModalOpen(true);
@@ -259,6 +265,10 @@ export const App: React.FC = () => {
           <StudentDetailView
             studentId={routeParam}
             onNavigate={navigate}
+            onShowReceipt={payment => {
+              setSelectedPayment(payment);
+              setReceiptModalOpen(true);
+            }}
             onEditStudent={s => {
               setSelectedStudent(s);
               setStudentModalOpen(true);
@@ -307,6 +317,10 @@ export const App: React.FC = () => {
         {route === 'money' && (
           <MoneyView
             onNavigate={navigate}
+            onShowReceipt={payment => {
+              setSelectedPayment(payment);
+              setReceiptModalOpen(true);
+            }}
             onRecordPayment={opts => {
               setSelectedPayment(opts?.payment || null);
               setPaymentOpts(opts || {});
@@ -417,6 +431,12 @@ export const App: React.FC = () => {
         onClose={() => setPaymentModalOpen(false)}
       />
 
+      <PaymentReceiptModal
+        isOpen={receiptModalOpen}
+        payment={selectedPayment}
+        onClose={() => setReceiptModalOpen(false)}
+      />
+
       <ExpenseModal
         isOpen={expenseModalOpen}
         expense={selectedExpense}
@@ -447,6 +467,11 @@ export const App: React.FC = () => {
       <ImportDocModal
         isOpen={importDocModalOpen}
         onClose={() => setImportDocModalOpen(false)}
+      />
+
+      <BulkStudentModal
+        isOpen={bulkStudentModalOpen}
+        onClose={() => setBulkStudentModalOpen(false)}
       />
 
       <AuthModal
