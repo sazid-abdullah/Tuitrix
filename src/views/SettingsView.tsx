@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { AI_PROVIDERS, fetchModelList, callAI, autoModel, readModelCache } from '../services/ai';
 import { todayISO, fmtDate } from '../utils/date';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -328,7 +329,10 @@ export const SettingsView: React.FC = () => {
     <div>
       <div className="page-head">
         <div>
-          <h1>Settings</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1>Settings</h1>
+            <SectionGuidePopover sectionKey="settings" />
+          </div>
           <div className="sub">Tutor profile, AI engines, data backup & publishing setup</div>
 
           <button className="btn outline" onClick={() => window.location.href = window.location.pathname + '?landing=1'}>

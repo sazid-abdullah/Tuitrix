@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { renderAvatar, statusBadge } from './HomeView';
 import { scheduleSummary } from './StudentsView';
 import { studentBalance, contractStatus, cycleLabel, describeNextDue } from '../store/contracts';
@@ -34,8 +35,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 }) => {
   const { state, getStudent, money, deleteStudent, deleteContract, saveContract, saveStudent, toast, addExamScore, deleteExamScore } = useStore();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [contractToDelete, setContractToDelete] = useState<string | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [contractToDelete, setContractToDelete] = useState<string | null>(null);
   const [waLang, setWaLang] = useState<'en' | 'bn'>('en');
   const [scoreFormOpen, setScoreFormOpen] = useState(false);
   const [scoreForm, setScoreForm] = useState<Partial<ExamScore>>({
@@ -140,13 +141,16 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center', minWidth: 0 }}>
           {renderAvatar(student, 56)}
           <div style={{ minWidth: 0 }}>
-            <h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1>
               {student.name}
               {student.active === false && <span className="badge">Archived</span>}
               {(state.batches || []).filter(b => b.studentIds.includes(student.id)).map(b => (
                 <span key={b.id} className="badge blue" style={{ marginLeft: '6px' }}>👥 {b.name}</span>
               ))}
             </h1>
+              <SectionGuidePopover sectionKey="studentDetail" />
+            </div>
             <div className="sub">
               {[student.grade, student.curriculum, (student.subjects || []).join(', ')].filter(Boolean).join(' · ')}
             </div>
@@ -734,6 +738,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         </button>
       </div>
 
+      <ParentReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        studentId={student.id}
+      />
       <ConfirmModal
         isOpen={deleteConfirmOpen}
         title="Delete student?"

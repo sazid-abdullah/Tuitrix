@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import {
   callAI,
   AI_SYSTEM,
@@ -476,7 +477,10 @@ export const AIView: React.FC<AIViewProps> = ({
     <div>
       <div className="page-head">
         <div>
-          <h1>AI Assistant</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1>AI Assistant</h1>
+            <SectionGuidePopover sectionKey="ai" />
+          </div>
           <div className="sub">
             Lesson plans, exam papers, worksheets · {AI_PROVIDERS[state.ai.provider]?.name} (
             {autoModel(state.ai.provider, state)})

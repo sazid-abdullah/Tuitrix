@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { statusBadge } from './HomeView';
 import { monthKey, todayISO, fmtMonth, fmtDate, fmtTime } from '../utils/date';
 import { Lesson } from '../types';
@@ -50,7 +51,10 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
     <div>
       <div className="page-head">
         <div>
-          <h1>Classes</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1>Classes</h1>
+            <SectionGuidePopover sectionKey="classes" />
+          </div>
           <div className="sub">Manage routines and logs</div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
