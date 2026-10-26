@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { studentBalance } from '../store/contracts';
 import { renderAvatar } from './HomeView';
 import { WEEKDAYS, fmtTime } from '../utils/date';
@@ -77,7 +78,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     <div>
       <div className="page-head">
         <div>
-          <h1>Students & Batches</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1>Students & Batches</h1>
+            <SectionGuidePopover sectionKey="students" />
+          </div>
           <div className="sub">
             {viewMode === 'individual' ? `${activeCount} active students` : `${activeBatchesCount} active batches`}
           </div>

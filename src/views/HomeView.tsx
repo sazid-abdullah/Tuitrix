@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { todayISO, fmtDate, fmtTime, monthKey, daysBetween, WEEKDAYS } from '../utils/date';
 import { contractStatus, isDueSoon, describeNextDue } from '../store/contracts';
 import { Lesson, Student } from '../types';
@@ -123,7 +124,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         <div className="page-head">
           <div>
-            <h1>Welcome{greetName}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1>Welcome{greetName}</h1>
+              <SectionGuidePopover sectionKey="home" />
+            </div>
             <div className="sub">Your private tuition manager. Everything stays securely on this device.</div>
           </div>
         </div>
@@ -285,7 +289,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         <div className="page-head">
         <div>
-          <h1>Hello{greetName}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1>Hello{greetName}</h1>
+            <SectionGuidePopover sectionKey="home" />
+          </div>
           <div className="sub">
             {new Date().toLocaleDateString(undefined, {
               weekday: 'long',

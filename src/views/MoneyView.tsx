@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/context';
+import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { monthKey, todayISO, fmtMonth, fmtDate, parseISO, addMonths } from '../utils/date';
 import { moneySnapshot, contractStatus, goalPlan, MoneySnapshotResult } from '../store/contracts';
 import { callAI, MONEY_SYSTEM, moneyPrompt, renderMarkdown } from '../services/ai';
@@ -182,7 +183,10 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
     <div>
       <div className="page-head">
         <div>
-          <h1>Money</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1>Money</h1>
+            <SectionGuidePopover sectionKey="money" />
+          </div>
           <div className="sub">{fmtMonth(selectedMonth)}</div>
         </div>
         <div className="actions">
