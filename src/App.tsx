@@ -163,6 +163,7 @@ export const App: React.FC = () => {
   const handleEnterApp = () => {
     localStorage.setItem('tuitrix_entered_app', 'true');
     setShowLanding(false);
+    navigate('home');
 
     // Remove ?landing=1 from URL if present
     const query = new URLSearchParams(window.location.search);
@@ -387,6 +388,16 @@ export const App: React.FC = () => {
         )}
 
         {route === 'settings' && <SettingsView />}
+
+        {route === 'landing' && (
+          <LandingView
+            onEnterApp={handleEnterApp}
+            onSignIn={() => {
+              handleEnterApp();
+              setAuthModalOpen(true);
+            }}
+          />
+        )}
       </main>
 
       {/* Global Modals */}
