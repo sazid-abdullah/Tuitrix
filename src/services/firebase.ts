@@ -32,7 +32,7 @@ try {
   console.warn("Failed to initialize Firebase:", e);
 }
 
-export const submitTrxUpgradeRequest = async (uid: string, email: string, name: string | undefined, payload: { method: 'bkash' | 'nagad' | 'rocket'; senderPhone: string; trxId: string; amount: number; planTerm?: 'monthly' | 'yearly' }) => {
+export const submitTrxUpgradeRequest = async (uid: string, email: string, name: string | undefined, payload: { method: 'bkash' | 'nagad' | 'rocket'; senderPhone: string; trxId: string; amount: number; planTerm?: 'monthly' | 'yearly'; billingCycle?: 'monthly' | 'yearly'; promoCodeUsed?: string; discountAmountBdt?: number; finalAmountBdt: number }) => {
   const reqId = `req_${Date.now()}`;
   const now = new Date().toISOString();
 
@@ -45,7 +45,11 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
     senderPhone: payload.senderPhone,
     trxId: payload.trxId,
     amount: payload.amount,
+    billingCycle: payload.billingCycle || payload.planTerm,
     planTerm: payload.planTerm,
+    promoCodeUsed: payload.promoCodeUsed,
+    discountAmountBdt: payload.discountAmountBdt,
+    finalAmountBdt: payload.finalAmountBdt,
     status: 'pending',
     createdAt: now,
   };
@@ -55,6 +59,12 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
     trxId: payload.trxId,
     senderPhone: payload.senderPhone,
     createdAt: now,
+    amount: payload.amount,
+    planTerm: payload.planTerm,
+    billingCycle: payload.billingCycle || payload.planTerm,
+    promoCodeUsed: payload.promoCodeUsed,
+    discountAmountBdt: payload.discountAmountBdt,
+    finalAmountBdt: payload.finalAmountBdt,
     status: 'pending' as const,
   };
 
@@ -173,8 +183,12 @@ export const reviewUpgradeRequest = async (requestId: string, targetUid: string,
 
 
 const DEFAULT_PRICING: PricingConfig = {
-  monthlyPrice: 99,
-  yearlyPrice: 999,
+  monthlyPriceBdt: 99,
+  yearlyPriceBdt: 999,
+  promoCodes: [
+    { code: 'WELCOME30', discountPercent: 30, active: true, description: 'Welcome 30% off' },
+    { code: 'TUITRIX50', discountPercent: 50, active: true, description: 'Tuitrix 50% off' }
+  ],
   bkashNumber: '017XXXXXXX',
   nagadNumber: '017XXXXXXX',
   rocketNumber: '017XXXXXXX',
