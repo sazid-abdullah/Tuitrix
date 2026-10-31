@@ -251,7 +251,11 @@ export interface TrxUpgradeRequest {
   senderPhone: string;
   trxId: string;
   amount: number;
+  billingCycle?: 'monthly' | 'yearly';
   planTerm?: 'monthly' | 'yearly';
+  promoCodeUsed?: string;
+  discountAmountBdt?: number;
+  finalAmountBdt: number;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   reviewedAt?: string;
@@ -263,7 +267,7 @@ export interface BillingState {
   credits: number;
   updatedAt: number;
   transactions: any[];
-  pendingRequest?: { method: string; trxId: string; senderPhone: string; createdAt: string; status: 'pending' | 'approved' | 'rejected' };
+  pendingRequest?: { method: string; trxId: string; senderPhone: string; createdAt: string; status: 'pending' | 'approved' | 'rejected'; amount: number; planTerm?: 'monthly' | 'yearly'; billingCycle?: 'monthly' | 'yearly'; promoCodeUsed?: string; discountAmountBdt?: number; finalAmountBdt: number };
 }
 
 export interface AppState {
@@ -290,9 +294,17 @@ export interface AppState {
 }
 
 
+export interface PromoCode {
+  code: string;
+  discountPercent: number;
+  active: boolean;
+  description?: string;
+}
+
 export interface PricingConfig {
-  monthlyPrice: number;
-  yearlyPrice: number;
+  monthlyPriceBdt: number;
+  yearlyPriceBdt: number;
+  promoCodes: PromoCode[];
   bkashNumber: string;
   nagadNumber: string;
   rocketNumber: string;

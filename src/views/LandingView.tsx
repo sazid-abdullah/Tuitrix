@@ -41,7 +41,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
     fetchPricingConfig().then(config => setPricingConfig(config)).catch(() => {});
   }, []);
 
-  const monthlyPriceStr = pricingConfig ? `৳${pricingConfig.monthlyPrice}` : '৳199';
+  const monthlyPriceBdtStr = pricingConfig ? `৳${pricingConfig.monthlyPriceBdt}` : '৳199';
 
 
   return (
@@ -230,7 +230,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
           <div className="pricing-card pro">
             <div className="pro-badge">👑 PRO</div>
             <h3>Tuitrix Pro</h3>
-            <div className="price">{monthlyPriceStr} <span>/ month</span></div>
+            <div className="price">{monthlyPriceBdtStr} <span>/ month</span></div>
             <ul>
               <li>Unlimited Students & Batches</li>
               <li>Unlimited, Ad-Free AI Generation</li>

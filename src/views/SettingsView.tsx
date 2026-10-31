@@ -68,6 +68,9 @@ export const SettingsView: React.FC = () => {
   const [senderPhone, setSenderPhone] = useState('');
   const [trxId, setTrxId] = useState('');
   const [isSubmittingUpgrade, setIsSubmittingUpgrade] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{code: string; discountPercent: number} | null>(null);
+  const [promoError, setPromoError] = useState('');
 
 
   const [adminRequests, setAdminRequests] = useState<TrxUpgradeRequest[]>([]);
@@ -75,8 +78,9 @@ export const SettingsView: React.FC = () => {
 
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
   const [pricingForm, setPricingForm] = useState<PricingConfig>({
-    monthlyPrice: 99,
-    yearlyPrice: 999,
+    monthlyPriceBdt: 99,
+    yearlyPriceBdt: 999,
+    promoCodes: [],
     bkashNumber: '',
     nagadNumber: '',
     rocketNumber: '',
@@ -307,13 +311,55 @@ export const SettingsView: React.FC = () => {
 
     setIsSubmittingUpgrade(true);
     try {
-      await submitTrxUpgradeRequest(auth.currentUser.uid, auth.currentUser.email!, auth.currentUser.displayName || undefined, { method: upgradeMethod, senderPhone: phone, trxId: tid, amount: planTerm === 'monthly' ? (pricingConfig?.monthlyPrice || 99) : (pricingConfig?.yearlyPrice || 999), planTerm });
+      const baseAmount = planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
+      let finalAmount = baseAmount;
+      let discountAmount = 0;
+      if (appliedPromo) {
+        discountAmount = Math.round(baseAmount * (appliedPromo.discountPercent / 100));
+        finalAmount = Math.max(0, baseAmount - discountAmount);
+      }
+
+      await submitTrxUpgradeRequest(
+        auth.currentUser.uid,
+        auth.currentUser.email!,
+        auth.currentUser.displayName || undefined,
+        {
+          method: upgradeMethod,
+          senderPhone: phone || 'N/A',
+          trxId: finalAmount === 0 ? 'FREE_SCHOLARSHIP' : tid,
+          amount: baseAmount,
+          planTerm,
+          billingCycle: planTerm,
+          promoCodeUsed: appliedPromo?.code,
+          discountAmountBdt: discountAmount,
+          finalAmountBdt: finalAmount
+        }
+      );
       toast('Upgrade request submitted successfully! Waiting for verification.', 'success');
     } catch (err) {
       toast('Failed to submit request', 'error');
     }
     setIsSubmittingUpgrade(false);
   };
+
+  const handleApplyPromo = () => {
+    setPromoError('');
+    if (!promoInput.trim()) return;
+    const code = promoInput.trim().toUpperCase();
+    const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === code && p.active);
+    if (found) {
+      setAppliedPromo({ code: found.code, discountPercent: found.discountPercent });
+      setPromoError('');
+      toast('Promo code applied!', 'success');
+    } else {
+      setAppliedPromo(null);
+      setPromoError('Invalid or expired promo code');
+    }
+  };
+
+  const getSubtotal = () => planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
+  const getDiscount = () => appliedPromo ? Math.round(getSubtotal() * (appliedPromo.discountPercent / 100)) : 0;
+  const getTotal = () => Math.max(0, getSubtotal() - getDiscount());
 
   const handleReviewRequest = async (id: string, uid: string, action: 'approved' | 'rejected', planTerm?: 'monthly' | 'yearly', amount?: number) => {
     try {
@@ -353,27 +399,41 @@ export const SettingsView: React.FC = () => {
             {adminRequests.length === 0 ? (
               <p className="muted small">No pending upgrade requests.</p>
             ) : (
-              <table className="table" style={{ marginTop: '8px' }}>
+              <table className="table" style={{ marginTop: '8px', fontSize: '0.9rem' }}>
                 <thead>
                   <tr>
                     <th>User</th>
-                    <th>Method</th>
-                    <th>Phone</th>
-                    <th>TrxID</th>
-                    <th>Date</th>
+                    <th>Details</th>
+                    <th>Promo / Amount</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {adminRequests.map(req => (
                     <tr key={req.id}>
-                      <td>{req.userEmail}</td>
-                      <td>{req.method}</td>
-                      <td>{req.senderPhone}</td>
-                      <td>{req.trxId}</td>
-                      <td>{fmtDate(req.createdAt.split('T')[0])}</td>
                       <td>
-                        <button className="btn primary small" onClick={() => handleReviewRequest(req.id, req.uid, 'approved', req.planTerm, req.amount)} style={{ marginRight: '4px' }}>Approve</button>
+                        <div style={{ fontWeight: 'bold' }}>{req.userEmail}</div>
+                        <div className="small muted">{fmtDate(req.createdAt.split('T')[0])}</div>
+                        <div className="small muted">Plan: {req.billingCycle || req.planTerm}</div>
+                      </td>
+                      <td>
+                        <div><strong>M:</strong> {req.method.toUpperCase()}</div>
+                        <div><strong>TrxID:</strong> <code style={{background:'var(--bg)', padding:'2px 4px', borderRadius:'4px'}}>{req.trxId}</code></div>
+                        <div><strong>Phone:</strong> {req.senderPhone}</div>
+                      </td>
+                      <td>
+                        {req.promoCodeUsed ? (
+                          <div>
+                            <div style={{ color: 'var(--green)', fontWeight: 'bold', fontSize: '0.8rem' }}>Promo: {req.promoCodeUsed}</div>
+                            <div style={{ textDecoration: 'line-through', color: 'var(--muted)', fontSize: '0.8rem' }}>৳{req.amount}</div>
+                            <div style={{ fontWeight: 'bold' }}>Total: ৳{req.finalAmountBdt}</div>
+                          </div>
+                        ) : (
+                          <div style={{ fontWeight: 'bold' }}>৳{req.finalAmountBdt || req.amount}</div>
+                        )}
+                      </td>
+                      <td>
+                        <button className="btn primary small" onClick={() => handleReviewRequest(req.id, req.uid, 'approved', req.planTerm, req.finalAmountBdt || req.amount)} style={{ marginRight: '4px', marginBottom: '4px' }}>Approve</button>
                         <button className="btn danger small" onClick={() => handleReviewRequest(req.id, req.uid, 'rejected')}>Reject</button>
                       </td>
                     </tr>
@@ -392,12 +452,65 @@ export const SettingsView: React.FC = () => {
               <div className="form-row">
                 <label className="field">
                   Monthly Price (৳)
-                  <input type="number" value={pricingForm.monthlyPrice} onChange={e => setPricingForm({ ...pricingForm, monthlyPrice: Number(e.target.value) })} required />
+                  <input type="number" value={pricingForm.monthlyPriceBdt} onChange={e => setPricingForm({ ...pricingForm, monthlyPriceBdt: Number(e.target.value) })} required />
                 </label>
                 <label className="field">
                   Yearly Price (৳)
-                  <input type="number" value={pricingForm.yearlyPrice} onChange={e => setPricingForm({ ...pricingForm, yearlyPrice: Number(e.target.value) })} required />
+                  <input type="number" value={pricingForm.yearlyPriceBdt} onChange={e => setPricingForm({ ...pricingForm, yearlyPriceBdt: Number(e.target.value) })} required />
                 </label>
+              </div>
+
+              <div style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                <h4>Promo Codes</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                  {pricingForm.promoCodes?.map((promo, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        value={promo.code}
+                        onChange={e => {
+                          const newPromos = [...(pricingForm.promoCodes || [])];
+                          newPromos[idx].code = e.target.value.toUpperCase();
+                          setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                        }}
+                        placeholder="CODE"
+                        style={{ flex: 1 }}
+                      />
+                      <input
+                        type="number"
+                        value={promo.discountPercent}
+                        onChange={e => {
+                          const newPromos = [...(pricingForm.promoCodes || [])];
+                          newPromos[idx].discountPercent = Number(e.target.value);
+                          setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                        }}
+                        placeholder="%"
+                        style={{ width: '80px' }}
+                      />
+                      <label className="check" style={{ margin: 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={promo.active}
+                          onChange={e => {
+                            const newPromos = [...(pricingForm.promoCodes || [])];
+                            newPromos[idx].active = e.target.checked;
+                            setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                          }}
+                        />
+                        Active
+                      </label>
+                      <button type="button" className="btn danger small" onClick={() => {
+                        const newPromos = [...(pricingForm.promoCodes || [])];
+                        newPromos.splice(idx, 1);
+                        setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                      }}>X</button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn outline small" onClick={() => {
+                    const newPromos = [...(pricingForm.promoCodes || [])];
+                    newPromos.push({ code: '', discountPercent: 10, active: true });
+                    setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                  }}>+ Add Promo Code</button>
+                </div>
               </div>
               <div className="form-row">
                 <label className="field">
@@ -436,55 +549,158 @@ export const SettingsView: React.FC = () => {
               )}
 
               {!isPro && billingState?.pendingRequest && billingState.pendingRequest.status === 'pending' && (
-                <div style={{ marginTop: '12px', padding: '12px', background: 'var(--card2)', borderRadius: '8px', borderLeft: '4px solid var(--accent)' }}>
-                  <strong>⏳ Upgrade Request Pending Verification</strong>
-                  <p className="small muted" style={{ marginTop: '4px' }}>We are verifying your TrxID ({billingState.pendingRequest.trxId}). Pro access will be granted shortly.</p>
+                <div style={{ marginTop: '24px', padding: '20px', background: 'var(--card2)', borderRadius: '8px', borderLeft: '4px solid var(--accent)' }}>
+                  <h4 style={{ marginBottom: '16px' }}>⏳ Verification Tracker</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      ● Step 1: Payment Details Submitted (TrxID: {billingState.pendingRequest.trxId})
+                    </div>
+                    <div style={{ color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
+                      <span className="pulse">◉</span> Step 2: Admin Verification in Progress (Typically 15–60 mins)
+                    </div>
+                    <div style={{ color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      ○ Step 3: Tuitrix Pro Unlocked
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg)', borderRadius: '4px', fontSize: '0.9rem' }}>
+                    <div><strong>Method:</strong> {billingState.pendingRequest.method.toUpperCase()}</div>
+                    <div><strong>Amount:</strong> ৳{billingState.pendingRequest.finalAmountBdt || billingState.pendingRequest.amount}</div>
+                    {billingState.pendingRequest.promoCodeUsed && <div><strong>Promo:</strong> {billingState.pendingRequest.promoCodeUsed}</div>}
+                    <div><strong>Submitted:</strong> {fmtDate(billingState.pendingRequest.createdAt)}</div>
+                  </div>
+                  <button
+                    className="btn primary"
+                    style={{ marginTop: '16px', width: '100%', background: '#25D366', color: '#fff' }}
+                    onClick={() => {
+                      const msg = `Hi! I just submitted an upgrade request for Tuitrix Pro.\nEmail: ${auth?.currentUser?.email}\nPlan: ${billingState.pendingRequest?.planTerm}\nAmount: ৳${billingState.pendingRequest?.finalAmountBdt || billingState.pendingRequest?.amount}\nTrxID: ${billingState.pendingRequest?.trxId}`;
+                      window.open(`https://wa.me/88${pricingConfig?.bkashNumber}?text=${encodeURIComponent(msg)}`, '_blank');
+                    }}
+                  >
+                    Need Instant Activation? Send TrxID via WhatsApp 💬
+                  </button>
                 </div>
               )}
 
               {!isPro && (!billingState?.pendingRequest || billingState.pendingRequest.status !== 'pending') && (
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                  <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Upgrade to Tuitrix Pro (bKash / Nagad)</h3>
-                  {pricingConfig?.promoText && (
-                    <div style={{ marginBottom: '12px', padding: '8px', background: 'var(--yellow)', color: '#000', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.9rem', textAlign: 'center' }}>
-                      {pricingConfig.promoText}
+                  <h3 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>🚀 Upgrade to Tuitrix Pro</h3>
+
+                  {/* Step A: Plan Toggle */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <h4>Step A: Select Plan</h4>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                      <div
+                        onClick={() => setPlanTerm('monthly')}
+                        style={{ flex: 1, padding: '16px', border: planTerm === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', textAlign: 'center' }}
+                      >
+                        <strong>Monthly Pro</strong>
+                        <div style={{ fontSize: '1.2rem', marginTop: '8px' }}>৳{pricingConfig?.monthlyPriceBdt || 99} <span className="small muted">/mo</span></div>
+                      </div>
+                      <div
+                        onClick={() => setPlanTerm('yearly')}
+                        style={{ flex: 1, padding: '16px', border: planTerm === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', textAlign: 'center', position: 'relative' }}
+                      >
+                        <div style={{ position: 'absolute', top: '-10px', right: '10px', background: 'var(--green)', color: '#fff', fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>Save ~17%</div>
+                        <strong>Yearly Pro</strong>
+                        <div style={{ fontSize: '1.2rem', marginTop: '8px' }}>৳{pricingConfig?.yearlyPriceBdt || 999} <span className="small muted">/yr</span></div>
+                      </div>
+                    </div>
+                    <ul className="small muted" style={{ marginTop: '12px', paddingLeft: '20px', lineHeight: '1.6' }}>
+                      <li>Unlimited Students & Batches</li>
+                      <li>Cloud Sync across devices</li>
+                      <li>AI Exam & Lecture Sheet PDF Generator</li>
+                      <li>Live Parent Portal</li>
+                      <li>0 Ads</li>
+                    </ul>
+                  </div>
+
+                  {/* Step B: Promo & Summary */}
+                  <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--card2)', borderRadius: '8px' }}>
+                    <h4>Step B: Have a Promo or Scholarship Code?</h4>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <input
+                        placeholder="Enter code"
+                        value={promoInput}
+                        onChange={e => setPromoInput(e.target.value)}
+                        disabled={!!appliedPromo}
+                        style={{ flex: 1 }}
+                      />
+                      {appliedPromo ? (
+                        <button className="btn outline" onClick={() => { setAppliedPromo(null); setPromoInput(''); }}>Remove</button>
+                      ) : (
+                        <button className="btn" onClick={handleApplyPromo}>Apply</button>
+                      )}
+                    </div>
+                    {promoError && <div style={{ color: 'var(--red)', fontSize: '0.85rem', marginTop: '4px' }}>{promoError}</div>}
+                    {appliedPromo && <div style={{ color: 'var(--green)', fontSize: '0.85rem', marginTop: '4px', fontWeight: 'bold' }}>✓ Code applied! You saved ৳{getDiscount()} ({appliedPromo.discountPercent}% OFF)</div>}
+
+                    <div style={{ marginTop: '16px', padding: '12px', border: '1px dashed var(--border)', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span>Plan Subtotal:</span>
+                        <span>৳{getSubtotal()}</span>
+                      </div>
+                      {appliedPromo && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: 'var(--green)' }}>
+                          <span>Promo Discount ({appliedPromo.code}):</span>
+                          <span>-৳{getDiscount()}</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1.1rem' }}>
+                        <span>Total Payable Today:</span>
+                        <span>৳{getTotal()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {getTotal() === 0 ? (
+                    <button className="btn primary" onClick={handleUpgradeSubmit} disabled={isSubmittingUpgrade} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
+                      {isSubmittingUpgrade ? 'Activating...' : 'Activate Free Pro Scholarship Now 🚀'}
+                    </button>
+                  ) : (
+                    <div style={{ marginBottom: '24px' }}>
+                      <h4>Step C: Payment & Verification</h4>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '12px', marginBottom: '16px' }}>
+                        <button className="btn" style={{ flex: 1, background: upgradeMethod === 'bkash' ? '#E2136E' : 'var(--card2)', color: upgradeMethod === 'bkash' ? '#fff' : 'inherit' }} onClick={() => setUpgradeMethod('bkash')}>bKash</button>
+                        <button className="btn" style={{ flex: 1, background: upgradeMethod === 'nagad' ? '#F7941D' : 'var(--card2)', color: upgradeMethod === 'nagad' ? '#fff' : 'inherit' }} onClick={() => setUpgradeMethod('nagad')}>Nagad</button>
+                        <button className="btn" style={{ flex: 1, background: upgradeMethod === 'rocket' ? '#8C3494' : 'var(--card2)', color: upgradeMethod === 'rocket' ? '#fff' : 'inherit' }} onClick={() => setUpgradeMethod('rocket')}>Rocket</button>
+                      </div>
+
+                      <div style={{ padding: '16px', background: 'var(--card2)', borderRadius: '8px', marginBottom: '16px' }}>
+                        <ol style={{ paddingLeft: '20px', margin: 0, lineHeight: '1.6' }}>
+                          <li>Open your <strong>{upgradeMethod.charAt(0).toUpperCase() + upgradeMethod.slice(1)}</strong> app and tap <strong>Send Money</strong> (Personal).</li>
+                          <li style={{ marginTop: '8px' }}>
+                            Send exact amount: <strong>৳{getTotal()}</strong> to:
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                              <code style={{ fontSize: '1.2rem', padding: '4px 8px', background: 'var(--bg)', borderRadius: '4px' }}>
+                                {upgradeMethod === 'bkash' ? pricingConfig?.bkashNumber : upgradeMethod === 'nagad' ? pricingConfig?.nagadNumber : pricingConfig?.rocketNumber}
+                              </code>
+                              <button className="btn outline small" onClick={() => {
+                                const num = upgradeMethod === 'bkash' ? pricingConfig?.bkashNumber : upgradeMethod === 'nagad' ? pricingConfig?.nagadNumber : pricingConfig?.rocketNumber;
+                                navigator.clipboard.writeText(num || '');
+                                toast('Copied! ✓', 'success');
+                              }}>Copy Number</button>
+                            </div>
+                          </li>
+                        </ol>
+                      </div>
+
+                      <form className="form" onSubmit={handleUpgradeSubmit}>
+                        <div className="form-row">
+                          <label className="field">
+                            Sender Phone Number
+                            <input placeholder="017..." value={senderPhone} onChange={e => setSenderPhone(e.target.value)} required />
+                          </label>
+                          <label className="field">
+                            Transaction ID (TrxID)
+                            <input placeholder="e.g. BJM82K9L0P" value={trxId} onChange={e => setTrxId(e.target.value.toUpperCase())} required />
+                          </label>
+                        </div>
+                        <button type="submit" className="btn primary" disabled={isSubmittingUpgrade} style={{ marginTop: '12px', width: '100%', padding: '12px', fontSize: '1.1rem' }}>
+                          {isSubmittingUpgrade ? 'Submitting...' : 'Submit Payment Details'}
+                        </button>
+                      </form>
                     </div>
                   )}
-                  <p className="small muted" style={{ marginBottom: '12px' }}>
-                    Select your plan, send the amount via Send Money to the number below, then enter your TrxID to get Pro features.
-                  </p>
-                  <form className="form" onSubmit={handleUpgradeSubmit}>
-                    <div className="form-row">
-                      <label className="field">
-                        Plan Term
-                        <select value={planTerm} onChange={e => setPlanTerm(e.target.value as 'monthly' | 'yearly')}>
-                          <option value="monthly">Monthly (৳{pricingConfig?.monthlyPrice || 99})</option>
-                          <option value="yearly">Yearly (৳{pricingConfig?.yearlyPrice || 999})</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div className="form-row">
-                      <label className="field">
-                        Payment Method
-                        <select value={upgradeMethod} onChange={e => setUpgradeMethod(e.target.value as any)}>
-                          <option value="bkash">bKash ({pricingConfig?.bkashNumber || '017XXXXXXX'})</option>
-                          <option value="nagad">Nagad ({pricingConfig?.nagadNumber || '017XXXXXXX'})</option>
-                          <option value="rocket">Rocket ({pricingConfig?.rocketNumber || '017XXXXXXX'})</option>
-                        </select>
-                      </label>
-                      <label className="field">
-                        Sender Phone
-                        <input placeholder="017..." value={senderPhone} onChange={e => setSenderPhone(e.target.value)} required />
-                      </label>
-                    </div>
-                    <label className="field" style={{ marginTop: '8px' }}>
-                      Transaction ID (TrxID)
-                      <input placeholder="e.g. BJM82K9L0P" value={trxId} onChange={e => setTrxId(e.target.value.toUpperCase())} required />
-                    </label>
-                    <button type="submit" className="btn primary" disabled={isSubmittingUpgrade} style={{ marginTop: '12px', width: '100%' }}>
-                      {isSubmittingUpgrade ? 'Submitting...' : 'Submit TrxID'}
-                    </button>
-                  </form>
                 </div>
               )}
 

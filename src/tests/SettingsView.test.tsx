@@ -15,7 +15,7 @@ vi.mock('../services/firebase', () => ({
   auth: {},
   db: {},
   onAuthStateChanged: vi.fn(),
-  fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPrice: 99, yearlyPrice: 999, bkashNumber: '', nagadNumber: '', rocketNumber: '', promoText: '', updatedAt: 0 })),
+  fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 99, yearlyPriceBdt: 999, bkashNumber: '', nagadNumber: '', rocketNumber: '', promoCodes: [], promoText: '', updatedAt: 0 })),
   updatePricingConfig: vi.fn(),
   fetchPendingUpgradeRequests: vi.fn(() => Promise.resolve([])),
 }));
