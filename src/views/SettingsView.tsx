@@ -423,28 +423,28 @@ export const SettingsView: React.FC = () => {
         )}
 
         {/* Billing Card */}
-        <div className="card">
-          <h2>Account & Billing</h2>
-          {billingState ? (
+        <div className="card" id="upgrade-section">
+          <h2>Subscription & Plan</h2>
+          {auth?.currentUser ? (
             <div>
-              <p>Current Plan: <strong>{billingState.plan === 'pro' ? 'Pro' : 'Free'}</strong></p>
-              {billingState.plan === 'pro' && (
+              <p>Current Plan: <strong>{isPro ? 'Pro Tier' : 'Free Tier'}</strong></p>
+              {isPro && billingState?.proUntil && (
                 <p>Pro Until: {fmtDate(new Date(billingState.proUntil).toISOString())}</p>
               )}
-              {billingState.plan === 'free' && (
-                <p>AI Credits: <strong>{billingState.credits}</strong></p>
+              {!isPro && (!billingState || billingState.plan === 'free') && (
+                <p>AI Credits: <strong>{billingState?.credits || 0}</strong></p>
               )}
 
-              {billingState.pendingRequest && billingState.pendingRequest.status === 'pending' && (
+              {!isPro && billingState?.pendingRequest && billingState.pendingRequest.status === 'pending' && (
                 <div style={{ marginTop: '12px', padding: '12px', background: 'var(--card2)', borderRadius: '8px', borderLeft: '4px solid var(--accent)' }}>
-                  <strong>⏳ Verification Pending</strong>
+                  <strong>⏳ Upgrade Request Pending Verification</strong>
                   <p className="small muted" style={{ marginTop: '4px' }}>We are verifying your TrxID ({billingState.pendingRequest.trxId}). Pro access will be granted shortly.</p>
                 </div>
               )}
 
-              {billingState.plan === 'free' && (!billingState.pendingRequest || billingState.pendingRequest.status !== 'pending') && (
+              {!isPro && (!billingState?.pendingRequest || billingState.pendingRequest.status !== 'pending') && (
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                  <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Upgrade to Pro</h3>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Upgrade to Tuitrix Pro (bKash / Nagad)</h3>
                   {pricingConfig?.promoText && (
                     <div style={{ marginBottom: '12px', padding: '8px', background: 'var(--yellow)', color: '#000', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.9rem', textAlign: 'center' }}>
                       {pricingConfig.promoText}
@@ -488,7 +488,7 @@ export const SettingsView: React.FC = () => {
                 </div>
               )}
 
-              {billingState.transactions && billingState.transactions.length > 0 && (
+              {billingState?.transactions && billingState.transactions.length > 0 && (
                 <div style={{ marginTop: '16px' }}>
                   <h3>Transaction History</h3>
                   <table className="table" style={{ marginTop: '8px' }}>
@@ -891,38 +891,6 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
 
-        {/* Publishing & Monetization Guide */}
-        <div className="card">
-          <h2>Publishing & Monetization Architecture</h2>
-          <p className="muted small" style={{ marginBottom: '12px' }}>
-            Everything you need to launch Tuitrix as both an installable app and public web application:
-          </p>
-
-          <div style={{ display: 'grid', gap: '14px', fontSize: '0.9rem' }}>
-            <div style={{ padding: '12px', background: 'var(--card2)', borderRadius: '10px' }}>
-              <b style={{ color: 'var(--accent)' }}>1. Web & Mobile App Deployment (PWA)</b>
-              <p className="muted small" style={{ marginTop: '4px' }}>
-                Tuitrix is built as a Progressive Web App (PWA). When hosted on Vercel, Firebase Hosting, Netlify, or Cloud Run, visitors on <b>Android, iPhone, iPad, Windows, or Mac</b> will see an "Install app" prompt or can tap "Add to Home Screen". It installs directly as a standalone native-feeling app without needing app store approval!
-              </p>
-            </div>
-
-            <div style={{ padding: '12px', background: 'var(--card2)', borderRadius: '10px' }}>
-              <b style={{ color: 'var(--green)' }}>2. Android Google Play Store APK</b>
-              <p className="muted small" style={{ marginTop: '4px' }}>
-                You can wrap this Vite PWA using <b>Bubblewrap (TWA - Trusted Web Activity)</b> or <b>Capacitor</b> to produce a signed <code>.aab</code> (Android App Bundle) or <code>.apk</code> in minutes and publish directly to Google Play.
-              </p>
-            </div>
-
-            <div style={{ padding: '12px', background: 'var(--card2)', borderRadius: '10px' }}>
-              <b style={{ color: 'var(--yellow)' }}>3. Monetization & Earning Options</b>
-              <p className="muted small" style={{ marginTop: '4px' }}>
-                • <b>Tuition Management Pro Subscriptions</b>: Charge tutors monthly (e.g. ৳299/mo or $5/mo) for cloud backup and AI lesson generator usage via <b>SSLCommerz, bKash, Nagad</b> or <b>Stripe</b>.
-                <br />• <b>Ad-Rewarded Credits</b>: Integrate Google AdSense / AdMob banners to earn ad revenue while tutors generate exam papers.
-                <br />• <b>Affiliate or School Batch Licensing</b>: Offer multi-tutor or coaching center accounts.
-              </p>
-            </div>
-          </div>
-        </div>
 
         <p className="muted small" style={{ textAlign: 'center', marginTop: '12px' }}>
           {state.students.length} students · {state.lessons.length} logged classes ·{' '}

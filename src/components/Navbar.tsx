@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, signOut, onAuthStateChanged } from '../services/firebase';
 import { User } from 'firebase/auth';
 import { useStore } from '../store/context';
+import { isProUser } from '../utils/tierLimits';
 
 interface NavbarProps {
   currentRoute: string;
@@ -240,12 +241,22 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
 
           {user ? (
             <>
-              {billingState ? (
-                <span className={`badge ${billingState.plan === 'pro' ? 'green' : 'blue'}`}>
-                  {billingState.plan === 'pro' ? 'Pro' : `${billingState.credits} credits`}
-                </span>
+              {isProUser(billingState, user.email) ? (
+                <span className="badge green">Pro</span>
               ) : (
-                <span className="badge blue hide-mobile">Free (BYOK)</span>
+                <button
+                  onClick={() => {
+                    onNavigate('settings');
+                    setTimeout(() => {
+                      const el = document.getElementById('upgrade-section');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                  }}
+                  className="badge blue hide-mobile"
+                  style={{ cursor: 'pointer', border: 'none' }}
+                >
+                  Free Plan · Upgrade to Pro ✨
+                </button>
               )}
               <span style={{ color: 'var(--muted)' }} className="hide-mobile">{user.email}</span>
               <button onClick={() => auth && signOut(auth)} className="btn xs">Logout</button>
