@@ -161,7 +161,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
         )}
 
         <div>
-          <h3>Verified Attendance (Recent Classes)</h3>
+          <h3>Verified Classes (Recent Classes)</h3>
           {lessons.length === 0 ? (
             <p className="small muted" style={{ marginTop: '8px' }}>No classes recorded yet.</p>
           ) : (

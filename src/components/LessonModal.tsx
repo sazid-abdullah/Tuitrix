@@ -372,7 +372,7 @@ export const LessonModal: React.FC<LessonModalProps> = ({
             {batchId && (
               <div className="field">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="muted small" style={{ fontWeight: 500 }}>Attendance</span>
+                  <span className="muted small" style={{ fontWeight: 500 }}>Class Status</span>
                   <button
                     type="button"
                     className="btn xs ghost"
