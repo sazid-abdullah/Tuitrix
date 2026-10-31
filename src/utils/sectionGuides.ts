@@ -153,12 +153,12 @@ export const sectionGuides: Record<SectionGuideKey, SectionGuide> = {
       {
         icon: '📅',
         en: {
-          title: 'Class Attendance',
+          title: 'Classes Completed',
           desc: 'Track every class taught, auto-increment cycle counters (e.g., 11/12 classes), and view your weekly teaching timetable.',
           tip: 'Keep your class cycles perfectly synced.'
         },
         bn: {
-          title: 'ক্লাস উপস্থিতি',
+          title: 'সম্পন্ন ক্লাস',
           desc: 'নেওয়া প্রতিটি ক্লাস ট্র্যাক করুন, স্বয়ংক্রিয়ভাবে সাইকেল কাউন্টার (যেমন, ১১/১২ ক্লাস) বৃদ্ধি করুন এবং আপনার সাপ্তাহিক রুটিন দেখুন।',
           tip: 'আপনার ক্লাস সাইকেলগুলো সঠিকভাবে সিঙ্ক করুন।'
         }
@@ -167,13 +167,13 @@ export const sectionGuides: Record<SectionGuideKey, SectionGuide> = {
         icon: '✅',
         en: {
           title: 'Logging Classes',
-          desc: 'Log a single student\'s lesson or use Batch Attendance to mark an entire batch present in 1 tap (auto-fanning out lessons to each attended student).',
-          tip: 'Batch attendance saves huge amounts of time.'
+          desc: 'Log a single student\'s lesson or use Batch Progress to mark an entire batch in 1 tap (auto-fanning out lessons to each student).',
+          tip: 'Batch logging saves huge amounts of time.'
         },
         bn: {
           title: 'ক্লাস এন্ট্রি করা',
-          desc: 'একজন ছাত্রের ক্লাস এন্ট্রি করুন বা ব্যাচ অ্যাটেনডেন্স ব্যবহার করে এক ক্লিকেই পুরো ব্যাচের উপস্থিতি নিশ্চিত করুন।',
-          tip: 'ব্যাচ অ্যাটেনডেন্স অনেক সময় বাঁচায়।'
+          desc: 'একজন ছাত্রের ক্লাস এন্ট্রি করুন বা ব্যাচ প্রগ্রেস ব্যবহার করে এক ক্লিকেই পুরো ব্যাচের আপডেট নিশ্চিত করুন।',
+          tip: 'ব্যাচ এন্ট্রি অনেক সময় বাঁচায়।'
         }
       },
       {

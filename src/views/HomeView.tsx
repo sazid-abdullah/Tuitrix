@@ -103,7 +103,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '1.2rem', color: hasLesson ? 'var(--green)' : 'var(--muted)' }}>{hasLesson ? '✅' : '⬜'}</span>
               <span style={{ textDecoration: hasLesson ? 'line-through' : 'none', color: hasLesson ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 2:</b> Log your first Class Attendance (Classes tab)
+                <b>Step 2:</b> Log your first Classes Completed (Classes tab)
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -268,7 +268,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '1.2rem', color: hasLesson ? 'var(--green)' : 'var(--muted)' }}>{hasLesson ? '✅' : '⬜'}</span>
               <span style={{ textDecoration: hasLesson ? 'line-through' : 'none', color: hasLesson ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 2:</b> Log your first Class Attendance (Classes tab)
+                <b>Step 2:</b> Log your first Classes Completed (Classes tab)
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

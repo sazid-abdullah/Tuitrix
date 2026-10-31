@@ -38,7 +38,7 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
       }
     } else {
       // Show fallback alert
-      alert("To install on Android: Tap the Browser Menu (⋮) and select 'Install App' or 'Add to Home Screen'.");
+      alert("To install as PWA: Tap the Browser Menu (⋮) and select 'Install App' or 'Add to Home Screen'.");
     }
   };
 
@@ -64,6 +64,7 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
           <button className="btn primary" style={{ width: '100%', padding: '14px', fontSize: '1.05rem' }} onClick={handleDownload}>
             📥 Download Android APK
           </button>
+          <p style={{marginTop: '0px', fontSize: '0.9rem'}}><a href="https://github.com/sazid-abdullah/Tuitrix/releases/latest" target="_blank" rel="noreferrer">Or download latest Release from GitHub</a></p>
 
           <div style={{ padding: '16px', background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', width: '100%' }}>
              <p className="muted small" style={{ marginBottom: '12px' }}>Scan to open Tuitrix instantly:</p>

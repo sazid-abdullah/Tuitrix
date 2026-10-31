@@ -1130,7 +1130,7 @@ export const SettingsView: React.FC = () => {
       <ConfirmModal
         isOpen={demoConfirmOpen}
         title="Load demo data?"
-        message="This adds 3 sample students with realistic schedules, contracts, and attendance history alongside your existing data."
+        message="This adds 3 sample students with realistic schedules, contracts, and class history alongside your existing data."
         confirmLabel="Load demo"
         onConfirm={() => {
           loadDemoData();

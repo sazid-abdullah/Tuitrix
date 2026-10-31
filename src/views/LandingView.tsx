@@ -83,7 +83,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
           </h1>
           <p className="hero-sub">
             {lang === 'EN'
-              ? 'Track 12-class or monthly tuition cycles, log batch attendance in 1 tap, send verified Bangla/English WhatsApp parent reports, and generate print-ready PDF exam sheets with AI.'
+              ? 'Track 12-class or monthly tuition cycles, log batch progress in 1 tap, send verified Bangla/English WhatsApp parent reports, and generate print-ready PDF exam sheets with AI.'
               : '১২-ক্লাস বা মাসিক টিউশন সাইকেল ট্র্যাক করুন, ১ ক্লিকে ব্যাচ হাজিরা নিন, হোয়াটসঅ্যাপে রেজাল্ট পাঠান এবং এআই দিয়ে পরীক্ষার প্রশ্ন তৈরি করুন।'}
           </p>
           <div className="hero-ctas">
@@ -162,14 +162,14 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
                       [Tuitrix Update]
                       Student: Rahim
                       Physics Exam: 85%
-                      Attendance: Present
+                      Classes Completed: 1
                     </pre>
                   ) : (
                     <pre>
                       [টুইট্রিক্স আপডেট]
                       শিক্ষার্থী: রহিম
                       পদার্থবিজ্ঞান পরীক্ষা: ৮৫%
-                      উপস্থিতি: উপস্থিত
+                      ক্লাস: ১
                     </pre>
                   )}
                 </div>

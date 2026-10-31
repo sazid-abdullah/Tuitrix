@@ -10,12 +10,17 @@
     "lint": "tsc --noEmit",
     "preview": "vite preview",
     "start": "vite --host 0.0.0.0 --port 3000",
-    "test": "vitest run"
+    "test": "vitest run",
+    "cap:sync": "npx cap sync android",
+    "build:android": "npm run build && npx cap sync android"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "firebase": "^13.0.0",
     "firebase-admin": "^14.5.0",
     "qrcode.react": "^4.2.0",

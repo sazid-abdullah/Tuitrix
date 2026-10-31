@@ -82,7 +82,10 @@ export const App: React.FC = () => {
 
   const navigate = (newRoute: string, param?: string) => {
     const hash = param ? `#/${newRoute}/${param}` : `#/${newRoute}`;
-    window.location.hash = hash;
+    if (window.location.hash !== hash) {
+      window.history.pushState(null, '', hash);
+      parseHash();
+    }
   };
 
   // Modal states
