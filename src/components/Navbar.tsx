@@ -213,59 +213,21 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
           </button>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
-          <button
-            onClick={() => updateSettings({ theme: state.settings.theme === 'light' ? 'dark' : 'light' })}
-            className="icon-btn"
-            title={state.settings.theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            style={{ padding: '4px', fontSize: '1.2rem', marginRight: '4px' }}
-          >
-            {state.settings.theme === 'light' ? '🌙' : '☀️'}
-          </button>
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }} className="hide-mobile">
           {syncStatus === 'synced' && (
-            <span className="badge green hide-mobile" title={lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Synced to cloud'}>☁️ Synced</span>
+            <span className="badge green" title={lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Synced to cloud'}>☁️ Synced</span>
           )}
           {syncStatus === 'syncing' && (
-            <span className="badge blue hide-mobile" style={{ animation: 'pulse 1.5s infinite' }} title="Syncing changes to cloud...">🔄 Syncing...</span>
+            <span className="badge blue" style={{ animation: 'pulse 1.5s infinite' }} title="Syncing changes to cloud...">🔄 Syncing...</span>
           )}
           {syncStatus === 'offline' && (
-            <span className="badge yellow hide-mobile" title="You are offline. Changes saved locally.">⚡ Offline (Saved Locally)</span>
+            <span className="badge yellow" title="You are offline. Changes saved locally.">⚡ Offline (Saved Locally)</span>
           )}
           {syncStatus === 'local' && (
-            <span className="badge hide-mobile" style={{ background: 'var(--surface-2)' }} title="Changes saved to local storage">⚡ Saved Locally</span>
+            <span className="badge" style={{ background: 'var(--surface-2)' }} title="Changes saved to local storage">⚡ Saved Locally</span>
           )}
           {syncStatus === 'error' && (
-            <span className="badge red hide-mobile" title="Error syncing to cloud">⚠️ Sync Error</span>
-          )}
-
-          {user ? (
-            <>
-              {isProUser(billingState, user.email) ? (
-                <span className="badge green">Pro</span>
-              ) : (
-                <button
-                  onClick={() => {
-                    onNavigate('settings');
-                    setTimeout(() => {
-                      const el = document.getElementById('upgrade-section');
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  }}
-                  className="badge blue hide-mobile"
-                  style={{ cursor: 'pointer', border: 'none' }}
-                >
-                  Free Plan · Upgrade to Pro ✨
-                </button>
-              )}
-              <span style={{ color: 'var(--muted)' }} className="hide-mobile">{user.email}</span>
-              <button onClick={() => auth && signOut(auth)} className="btn xs">Logout</button>
-            </>
-          ) : (
-            <>
-              <span className="badge blue hide-mobile">Free (BYOK)</span>
-              <button onClick={onLoginClick} className="btn xs primary">Login</button>
-            </>
+            <span className="badge red" title="Error syncing to cloud">⚠️ Sync Error</span>
           )}
         </div>
       </div>
@@ -287,11 +249,60 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
               data-route={item.id}
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span className="hide-mobile">{item.label}</span>
             </a>
           );
         })}
       </nav>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button
+          onClick={() => updateSettings({ theme: state.settings.theme === 'light' ? 'dark' : 'light' })}
+          className="icon-btn hide-mobile"
+          title={state.settings.theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          style={{ padding: '4px', fontSize: '1.2rem' }}
+        >
+          {state.settings.theme === 'light' ? '🌙' : '☀️'}
+        </button>
+
+        {user ? (
+          <div className="profile-pill hide-mobile">
+            <div className="avatar">
+              {user.email?.[0].toUpperCase() || '?'}
+            </div>
+            <span className="email">{user.email}</span>
+            {isProUser(billingState, user.email) ? (
+              <span className="badge green" style={{ padding: '2px 6px', fontSize: '0.65rem' }}>Pro</span>
+            ) : (
+              <button
+                onClick={() => {
+                  onNavigate('settings');
+                  setTimeout(() => {
+                    const el = document.getElementById('upgrade-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }, 100);
+                }}
+                className="badge blue"
+                style={{ cursor: 'pointer', border: 'none', padding: '2px 6px', fontSize: '0.65rem' }}
+              >
+                Upgrade ✨
+              </button>
+            )}
+            <button onClick={() => auth && signOut(auth)} className="icon-btn" title="Logout" style={{ padding: '4px' }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className="hide-mobile" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span className="badge blue">Free (BYOK)</span>
+            <button onClick={onLoginClick} className="btn xs primary" style={{ borderRadius: '99px', padding: '4px 12px' }}>Login</button>
+          </div>
+        )}
+      </div>
     </header>
   );
 };

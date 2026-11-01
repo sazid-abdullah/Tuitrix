@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/context';
 import { SectionGuidePopover } from '../components/SectionGuidePopover';
-import { studentBalance } from '../store/contracts';
+import { studentBalance, contractStatus } from '../store/contracts';
 import { renderAvatar } from './HomeView';
 import { WEEKDAYS, fmtTime } from '../utils/date';
 import { Student } from '../types';
@@ -145,32 +145,115 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             list.map(s => {
               const contracts = state.contracts.filter(c => c.studentId === s.id);
               const bal = studentBalance(s.id, state.contracts, state.lessons, state.payments);
+              let cycleRender = null;
+              if (contracts.length > 0) {
+                const activeContract = contracts.find(c => c.status !== 'ended') || contracts[0];
+                const st = contractStatus(activeContract, state.lessons, state.payments);
+
+                if (activeContract.cycleType === 'classes') {
+                  const maxSegments = 12; // cap visual segments so it doesn't break UI for large cycles
+                  const numSegments = Math.min(Number(activeContract.cycleLength) || 12, maxSegments);
+                  const progressPct = Math.min(st.progress * 100, 100);
+
+                  let glowColor = 'indigo';
+                  if (progressPct >= 100) glowColor = 'emerald';
+                  else if (progressPct >= 75) glowColor = 'amber';
+
+                  if (progressPct >= 100) {
+                    cycleRender = (
+                      <span className="badge emerald" style={{ animation: 'pulse 2s infinite' }}>🎉 Cycle Complete · Payment Due!</span>
+                    );
+                  } else {
+                    cycleRender = (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600 }}>
+                          <span className="mono">{st.taught - (st.completed * Number(activeContract.cycleLength))}</span> / <span className="mono">{activeContract.cycleLength}</span> classes
+                        </div>
+                        <div className="cycle-bar">
+                          <div className={`cycle-bar-fill ${glowColor}`} style={{ width: `${progressPct}%` }}></div>
+                        </div>
+                      </div>
+                    );
+                  }
+                }
+              }
+
+              // Get last topic
+              const studentLessons = state.lessons.filter(l => l.studentId === s.id && l.status === 'taught').sort((a,b) => b.date.localeCompare(a.date) || (b.time||'').localeCompare(a.time||''));
+              const lastLesson = studentLessons[0];
+              const topicStr = lastLesson?.topics || 'No topic logged yet';
+
+              const phoneLink = (phone?: string, text?: string) => {
+                let d = String(phone || '').replace(/\D/g, '');
+                if (!d) return '';
+                if (d.length === 11 && d.startsWith('01')) d = '88' + d;
+                return `https://wa.me/${d}?text=${encodeURIComponent(text || '')}`;
+              };
+
+              let dueText = '';
+              if (contracts.length > 0 && bal > 0.005) {
+                dueText = `Hello! A friendly reminder that the tuition fee of ${money(bal)} for ${s.name} is due. The billing cycle is complete.\nThank you!`;
+              }
+
               return (
-                <a
-                  key={s.id}
-                  className="row"
-                  href={`#/student/${s.id}`}
-                  onClick={e => {
-                    e.preventDefault();
-                    onNavigate('student', s.id);
-                  }}
-                >
-                  {renderAvatar(s)}
-                  <div className="grow">
-                    <div className="title">
-                      {s.name}
-                      {s.active === false && <span className="badge">Archived</span>}
-                      {(state.batches || []).filter(b => b.studentIds.includes(s.id)).map(b => (
-                        <span key={b.id} className="badge blue" style={{ marginLeft: '6px' }}>👥 {b.name}</span>
-                      ))}
+                <div key={s.id} className="row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+                  <a
+                    href={`#/student/${s.id}`}
+                    onClick={e => {
+                      e.preventDefault();
+                      onNavigate('student', s.id);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', textDecoration: 'none', color: 'inherit', width: '100%' }}
+                  >
+                    {renderAvatar(s)}
+                    <div className="grow">
+                      <div className="title">
+                        {s.name}
+                        {s.active === false && <span className="badge">Archived</span>}
+                        {(state.batches || []).filter(b => b.studentIds.includes(s.id)).map(b => (
+                          <span key={b.id} className="badge blue" style={{ marginLeft: '6px' }}>👥 {b.name}</span>
+                        ))}
+                      </div>
+                      <div className="meta">
+                        {[s.grade, (s.subjects || []).join(', ')].filter(Boolean).join(' · ')}
+                      </div>
+                      <div className="meta" style={{ marginTop: '2px', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                        📖 Last Topic: <i>{topicStr}</i>
+                      </div>
                     </div>
-                    <div className="meta">
-                      {[s.grade, (s.subjects || []).join(', ')].filter(Boolean).join(' · ')}
-                    </div>
-                    <div className="meta">{scheduleSummary(s)}</div>
+                    {contracts.length ? (cycleRender || balanceBadge(bal)) : <span className="badge">No contract</span>}
+                  </a>
+
+                  {/* Quick Actions Row */}
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px', paddingLeft: '46px', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn xs outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Pre-fill context
+                        let pre = `student=${s.id}`;
+                        if (topicStr !== 'No topic logged yet') {
+                           pre += `&topic=${encodeURIComponent(topicStr)}`;
+                        }
+                        onNavigate('ai', `prefill=true&${pre}`);
+                      }}
+                      title="Generate Notes or Quiz for next class"
+                    >
+                      ✨ AI Quiz / Notes
+                    </button>
+                    {bal > 0.005 && s.phone && (
+                      <a
+                        className="btn xs primary"
+                        href={phoneLink(s.phone, dueText)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        📲 Send Due Card
+                      </a>
+                    )}
                   </div>
-                  {contracts.length ? balanceBadge(bal) : <span className="badge">No contract</span>}
-                </a>
+                </div>
               );
             })
           )}

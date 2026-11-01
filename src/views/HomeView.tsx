@@ -128,7 +128,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <h1>Welcome{greetName}</h1>
               <SectionGuidePopover sectionKey="home" />
             </div>
-            <div className="sub">Your private tuition manager. Everything stays securely on this device.</div>
+            <div className="sub">Command Center for your tuition business.</div>
           </div>
         </div>
         <div className="card" style={{ textAlign: 'center', padding: '36px 20px' }}>
@@ -181,6 +181,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
     if (x.lesson) used.add(x.lesson.id);
   }
   const extraLessons = todaysLessons.filter(l => !used.has(l.id));
+
+  // Next step logic to inject Radar banner
+  const radarStudents = activeStudents.filter(s => {
+    // Show students scheduled today who haven't had a lesson yet
+    const hasScheduleToday = s.schedule?.some(slot => Number(slot.day) === dow);
+    const hasLessonToday = todaysLessons.some(l => l.studentId === s.id);
+    return hasScheduleToday && !hasLessonToday;
+  });
 
   // Stats
   const currentMonth = monthKey(today);
@@ -287,7 +295,40 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       )}
 
-        <div className="page-head">
+        {radarStudents.length > 0 && (
+        <div className="card" style={{ marginBottom: '16px', background: 'var(--accent-soft)', borderColor: 'var(--accent)' }}>
+          <h3 style={{ margin: '0 0 12px 0', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>📡</span> Today's Tuition Radar ({WEEKDAYS[dow]})
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {radarStudents.map(s => {
+              const slot = s.schedule?.find(sl => Number(sl.day) === dow);
+              return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {renderAvatar(s, 32)}
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{s.name}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                        {slot?.time ? fmtTime(slot.time) : 'No specific time'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="btn primary xs"
+                    style={{ borderRadius: '99px' }}
+                    onClick={() => onOpenLessonModal({ studentId: s.id, time: slot?.time, duration: slot?.duration })}
+                  >
+                    +1 Log Today's Class
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="page-head">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <h1>Hello{greetName}</h1>

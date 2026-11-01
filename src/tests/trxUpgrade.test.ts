@@ -61,6 +61,7 @@ describe('trxUpgrade functionality', () => {
       senderPhone: '01712345678',
       trxId: 'TRX1234567',
       amount: 99,
+      finalAmountBdt: 99,
     };
 
     const req = await submitTrxUpgradeRequest(uid, email, name, payload);
@@ -76,9 +77,9 @@ describe('trxUpgrade functionality', () => {
 
   it('fetches pending upgrade requests from local storage', async () => {
     const uid1 = 'uid-1';
-    await submitTrxUpgradeRequest(uid1, 'user1@test.com', 'User 1', { method: 'bkash', senderPhone: '01711111111', trxId: 'TRX1', amount: 99 });
+    await submitTrxUpgradeRequest(uid1, 'user1@test.com', 'User 1', { method: 'bkash', senderPhone: '01711111111', trxId: 'TRX1', amount: 99, finalAmountBdt: 99 });
     const uid2 = 'uid-2';
-    await submitTrxUpgradeRequest(uid2, 'user2@test.com', 'User 2', { method: 'nagad', senderPhone: '01722222222', trxId: 'TRX2', amount: 99 });
+    await submitTrxUpgradeRequest(uid2, 'user2@test.com', 'User 2', { method: 'nagad', senderPhone: '01722222222', trxId: 'TRX2', amount: 99, finalAmountBdt: 99 });
 
     const pendingReqs = await fetchPendingUpgradeRequests();
 
@@ -89,7 +90,7 @@ describe('trxUpgrade functionality', () => {
 
   it('reviews an upgrade request and updates its status', async () => {
     const uid = 'review-uid';
-    const req = await submitTrxUpgradeRequest(uid, 'review@test.com', 'Review User', { method: 'bkash', senderPhone: '01733333333', trxId: 'TRXREV', amount: 99 });
+    const req = await submitTrxUpgradeRequest(uid, 'review@test.com', 'Review User', { method: 'bkash', senderPhone: '01733333333', trxId: 'TRXREV', amount: 99, finalAmountBdt: 99 });
 
     await reviewUpgradeRequest(req.id, uid, 'approved');
 
