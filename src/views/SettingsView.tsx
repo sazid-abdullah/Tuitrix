@@ -535,6 +535,79 @@ export const SettingsView: React.FC = () => {
           </div>
         )}
 
+        {isOwner && (
+          <div className="card" style={{ gridColumn: '1 / -1', border: '2px solid var(--accent)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ color: 'var(--accent)', margin: 0 }}>🎟️ Owner Admin — Promo & Scholarship Code Studio</h2>
+              <button className="btn outline small" onClick={() => {
+                setTimeout(() => {
+                  const el = document.getElementById('upgrade-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+              }}>
+                👁️ Preview User Checkout UI
+              </button>
+            </div>
+
+            <div style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                {pricingForm.promoCodes?.map((promo, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      value={promo.code}
+                      onChange={e => {
+                        const newPromos = [...(pricingForm.promoCodes || [])];
+                        newPromos[idx].code = e.target.value.toUpperCase();
+                        setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                      }}
+                      placeholder="CODE"
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      type="number"
+                      value={promo.discountPercent}
+                      onChange={e => {
+                        const newPromos = [...(pricingForm.promoCodes || [])];
+                        newPromos[idx].discountPercent = Number(e.target.value);
+                        setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                      }}
+                      placeholder="%"
+                      style={{ width: '80px' }}
+                    />
+                    <label className="check" style={{ margin: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={promo.active}
+                        onChange={e => {
+                          const newPromos = [...(pricingForm.promoCodes || [])];
+                          newPromos[idx].active = e.target.checked;
+                          setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                        }}
+                      />
+                      Active
+                    </label>
+                    <button type="button" className="btn outline small" onClick={() => {
+                      const newPromos = [...(pricingForm.promoCodes || [])];
+                      newPromos.splice(idx, 1);
+                      setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                    }} title="Delete Promo Code">🗑️</button>
+                  </div>
+                ))}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                  <button type="button" className="btn primary outline small" onClick={() => {
+                    const newPromos = [...(pricingForm.promoCodes || [])];
+                    newPromos.push({ code: '', discountPercent: 10, active: true });
+                    setPricingForm({ ...pricingForm, promoCodes: newPromos });
+                  }}>+ Add Promo Code</button>
+
+                  <button className="btn primary" onClick={handleSavePricing}>Save Promo Codes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Billing Card */}
         <div className="card" id="upgrade-section">
           <h2>Subscription & Plan</h2>

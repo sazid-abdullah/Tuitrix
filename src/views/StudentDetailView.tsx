@@ -741,7 +741,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
       <ParentReportModal
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
-        studentId={student.id}
+        student={student}
       />
       <ConfirmModal
         isOpen={deleteConfirmOpen}

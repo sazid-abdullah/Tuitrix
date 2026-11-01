@@ -121,9 +121,47 @@ export const AIView: React.FC<AIViewProps> = ({
   const [localShowHeader, setLocalShowHeader] = useState(state.profile?.showPrintHeader ?? true);
   const [localShowWatermark, setLocalShowWatermark] = useState(state.profile?.showPrintWatermark ?? true);
 
-  // Prefill student details if student changes
+  // Route params handling for prefill
   useEffect(() => {
-    if (studentId) {
+    const hash = window.location.hash;
+    if (hash.includes('prefill=true') && hash.includes('student=')) {
+      try {
+        const params = new URLSearchParams(hash.split('?')[1] || hash.split('student=')[1]?.split('&')[0]);
+        let sid = params.get('student');
+        if (!sid && hash.includes('student=')) {
+           sid = hash.split('student=')[1].split('&')[0];
+        }
+
+        if (sid) {
+          setStudentId(sid);
+          const s = state.students.find(x => x.id === sid);
+          if (s) {
+            setGrade(s.grade || '');
+            setCurriculum(s.curriculum || '');
+            if (s.subjects && s.subjects[0]) setSubject(s.subjects[0]);
+
+            // Decode and set topic if passed, fallback to last lesson topic
+            let passedTopic = params.get('topic');
+            if (passedTopic) {
+               const dec = decodeURIComponent(passedTopic);
+               setTopic(dec);
+               setTopics(dec);
+            } else {
+              const studentLessons = state.lessons.filter(l => l.studentId === sid && l.status === 'taught').sort((a,b) => b.date.localeCompare(a.date) || (b.time||'').localeCompare(a.time||''));
+              if (studentLessons.length > 0 && studentLessons[0].topics) {
+                setTopic(studentLessons[0].topics);
+                setTopics(studentLessons[0].topics);
+              }
+            }
+          }
+        }
+      } catch (e) { console.error('Prefill parse error', e); }
+
+      // Clean URL after prefill while preserving search if any
+      const cleanUrl = window.location.pathname + window.location.search + '#/ai';
+      window.history.replaceState(null, '', cleanUrl);
+    } else if (studentId) {
+      // Normal prefill without URL params
       const s = state.students.find(x => x.id === studentId);
       if (s) {
         setGrade(s.grade || '');
@@ -131,7 +169,7 @@ export const AIView: React.FC<AIViewProps> = ({
         if (s.subjects && s.subjects[0]) setSubject(s.subjects[0]);
       }
     }
-  }, [studentId, state.students]);
+  }, [studentId, state.students, state.lessons]);
 
   const handleFillTopicsFromLog = () => {
     if (!studentId) {
