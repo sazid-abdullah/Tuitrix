@@ -53,7 +53,7 @@ export function SectionGuidePopover({ sectionKey }: SectionGuidePopoverProps) {
         title="How to use this section"
         aria-label="Section Guide"
       >
-        ℹ️
+        i
       </button>
 
       {isOpen && (

@@ -50,6 +50,34 @@ export function computeChecklistProgress(state: any) {
   return { hasStudent, hasLesson, hasAI, hasSettings };
 }
 
+const OnboardingStep: React.FC<{
+  stepNumber: number;
+  isComplete: boolean;
+  label: string;
+  onClick?: () => void;
+}> = ({ stepNumber, isComplete, label, onClick }) => (
+  <div
+    className="checklist-step-row"
+    onClick={onClick}
+    role="button"
+    tabIndex={0}
+    onKeyDown={e => {
+      if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+        e.preventDefault();
+        onClick();
+      }
+    }}
+    data-step={stepNumber}
+  >
+    <span className={`checklist-indicator ${isComplete ? 'completed' : ''}`}>
+      {isComplete ? '✓' : ''}
+    </span>
+    <span className={`checklist-step-text ${isComplete ? 'completed' : ''}`}>
+      <b>Step {stepNumber}:</b> {label}
+    </span>
+  </div>
+);
+
 export const HomeView: React.FC<HomeViewProps> = ({
   onNavigate,
   onOpenLessonModal,
@@ -93,31 +121,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button className="btn outline small" onClick={handleDismissChecklist}>Dismiss</button>
           </div>
           <p className="muted small" style={{ marginBottom: '12px' }}>Complete these quick steps to set up your tuition management.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasStudent ? 'var(--green)' : 'var(--muted)' }}>{hasStudent ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasStudent ? 'line-through' : 'none', color: hasStudent ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 1:</b> Add your first Student or Coaching Batch (Students tab)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasLesson ? 'var(--green)' : 'var(--muted)' }}>{hasLesson ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasLesson ? 'line-through' : 'none', color: hasLesson ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 2:</b> Log your first Classes Completed (Classes tab)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasAI ? 'var(--green)' : 'var(--muted)' }}>{hasAI ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasAI ? 'line-through' : 'none', color: hasAI ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 3:</b> Generate an AI Exam or Lecture Sheet (AI tab)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasSettings ? 'var(--green)' : 'var(--muted)' }}>{hasSettings ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasSettings ? 'line-through' : 'none', color: hasSettings ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 4:</b> Customize your Tutor Brand Header (Settings tab)
-              </span>
-            </div>
+          <div className="checklist-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+            <OnboardingStep
+              stepNumber={1}
+              isComplete={hasStudent}
+              label="Add your first Student or Coaching Batch (Students tab)"
+              onClick={() => onNavigate('students')}
+            />
+            <OnboardingStep
+              stepNumber={2}
+              isComplete={hasLesson}
+              label="Log your first Classes Completed (Classes tab)"
+              onClick={() => onNavigate('classes')}
+            />
+            <OnboardingStep
+              stepNumber={3}
+              isComplete={hasAI}
+              label="Generate an AI Exam or Lecture Sheet (AI tab)"
+              onClick={() => onNavigate('ai')}
+            />
+            <OnboardingStep
+              stepNumber={4}
+              isComplete={hasSettings}
+              label="Customize your Tutor Brand Header (Settings tab)"
+              onClick={() => onNavigate('settings')}
+            />
           </div>
         </div>
       )}
@@ -266,31 +294,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button className="btn outline small" onClick={handleDismissChecklist}>Dismiss</button>
           </div>
           <p className="muted small" style={{ marginBottom: '12px' }}>Complete these quick steps to set up your tuition management.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasStudent ? 'var(--green)' : 'var(--muted)' }}>{hasStudent ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasStudent ? 'line-through' : 'none', color: hasStudent ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 1:</b> Add your first Student or Coaching Batch (Students tab)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasLesson ? 'var(--green)' : 'var(--muted)' }}>{hasLesson ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasLesson ? 'line-through' : 'none', color: hasLesson ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 2:</b> Log your first Classes Completed (Classes tab)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasAI ? 'var(--green)' : 'var(--muted)' }}>{hasAI ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasAI ? 'line-through' : 'none', color: hasAI ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 3:</b> Generate an AI Exam or Lecture Sheet (AI tab)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem', color: hasSettings ? 'var(--green)' : 'var(--muted)' }}>{hasSettings ? '✅' : '⬜'}</span>
-              <span style={{ textDecoration: hasSettings ? 'line-through' : 'none', color: hasSettings ? 'var(--muted)' : 'inherit' }}>
-                <b>Step 4:</b> Customize your Tutor Brand Header (Settings tab)
-              </span>
-            </div>
+          <div className="checklist-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+            <OnboardingStep
+              stepNumber={1}
+              isComplete={hasStudent}
+              label="Add your first Student or Coaching Batch (Students tab)"
+              onClick={() => onNavigate('students')}
+            />
+            <OnboardingStep
+              stepNumber={2}
+              isComplete={hasLesson}
+              label="Log your first Classes Completed (Classes tab)"
+              onClick={() => onNavigate('classes')}
+            />
+            <OnboardingStep
+              stepNumber={3}
+              isComplete={hasAI}
+              label="Generate an AI Exam or Lecture Sheet (AI tab)"
+              onClick={() => onNavigate('ai')}
+            />
+            <OnboardingStep
+              stepNumber={4}
+              isComplete={hasSettings}
+              label="Customize your Tutor Brand Header (Settings tab)"
+              onClick={() => onNavigate('settings')}
+            />
           </div>
         </div>
       )}

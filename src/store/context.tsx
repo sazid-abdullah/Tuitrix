@@ -53,8 +53,17 @@ function loadState(): AppState {
       settings: loadedSettings,
       profile: { ...defaultState().profile, ...(parsed.profile || {}) },
       ai: { ...defaultState().ai, ...(parsed.ai || {}) },
+      students: Array.isArray(parsed.students) ? parsed.students : [],
       batches: Array.isArray(parsed.batches) ? parsed.batches : [],
+      lessons: Array.isArray(parsed.lessons) ? parsed.lessons : [],
+      contracts: Array.isArray(parsed.contracts) ? parsed.contracts : [],
+      payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+      expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
+      docs: Array.isArray(parsed.docs) ? parsed.docs : [],
       savedResources: Array.isArray(parsed.savedResources) ? parsed.savedResources : [],
+      goals: Array.isArray(parsed.goals) ? parsed.goals : [],
+      exams: Array.isArray(parsed.exams) ? parsed.exams : [],
+      attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
       promoCodes: Array.isArray(parsed.promoCodes) ? parsed.promoCodes : [],
     };
   } catch (e) {
@@ -125,7 +134,7 @@ interface StoreContextType {
   user: { email: string | null } | null;
 }
 
-const StoreContext = createContext<StoreContextType | null>(null);
+export const StoreContext = createContext<StoreContextType | null>(null);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>(loadState);
@@ -151,16 +160,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [user, setUser] = useState<{ email: string | null } | null>(null);
   const isMigratingRef = useRef(false);
   const authLoadedRef = useRef(false);
+  const isInitialRemoteLoadRef = useRef(false);
 
   // Firestore sync and migration
   useEffect(() => {
     let unsubscribeBilling: () => void;
+    let fallbackTimer: any = null;
 
     let unsubscribe: () => void = () => {};
     if (auth) { unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user ? { email: user.email } : null);
       if (user) {
         const isOwner = isOwnerEmail(user.email);
+        setSyncStatus(navigator.onLine ? 'syncing' : 'offline');
+
+        // Safe fallback timeout: transition to synced if snapshot/getDoc takes too long or is cached
+        fallbackTimer = setTimeout(() => {
+          setSyncStatus(prev => {
+            if (prev === 'syncing') {
+              return navigator.onLine ? 'synced' : 'offline';
+            }
+            return prev;
+          });
+          setLastSyncedAt(prev => prev || new Date().toISOString());
+        }, 3000);
 
         if (db) unsubscribeBilling = onSnapshot(doc(db, `users/${user.uid}/data/billing`), (billingDoc) => {
           if (isOwner) {
@@ -177,12 +200,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           } else {
             setBillingState(null);
           }
+
+          if (navigator.onLine) {
+            setSyncStatus(prev => (prev === 'syncing' ? 'synced' : prev));
+            setLastSyncedAt(prev => prev || new Date().toISOString());
+          }
         });
 
         authLoadedRef.current = true;
         try {
           if (!db) {
             setIsStateLoaded(true);
+            setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+            if (fallbackTimer) clearTimeout(fallbackTimer);
             return;
           }
           const docRef = doc(db, `users/${user.uid}/data/appState`);
@@ -196,16 +226,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               settings: { ...defaultState().settings, ...(remoteState.settings || {}) },
               profile: { ...defaultState().profile, ...(remoteState.profile || {}) },
               ai: { ...defaultState().ai, ...(remoteState.ai || {}) },
+              students: Array.isArray(remoteState.students) ? remoteState.students : [],
               batches: Array.isArray(remoteState.batches) ? remoteState.batches : [],
+              lessons: Array.isArray(remoteState.lessons) ? remoteState.lessons : [],
+              contracts: Array.isArray(remoteState.contracts) ? remoteState.contracts : [],
+              payments: Array.isArray(remoteState.payments) ? remoteState.payments : [],
+              expenses: Array.isArray(remoteState.expenses) ? remoteState.expenses : [],
+              docs: Array.isArray(remoteState.docs) ? remoteState.docs : [],
+              savedResources: Array.isArray(remoteState.savedResources) ? remoteState.savedResources : [],
+              goals: Array.isArray(remoteState.goals) ? remoteState.goals : [],
+              exams: Array.isArray(remoteState.exams) ? remoteState.exams : [],
+              attempts: Array.isArray(remoteState.attempts) ? remoteState.attempts : [],
               promoCodes: Array.isArray(remoteState.promoCodes) ? remoteState.promoCodes : [],
             };
             if (isOwner && (!remoteState.isOwner || !remoteState.isAdmin || remoteState.role !== 'owner')) {
                remoteState = { ...remoteState, isOwner: true, isAdmin: true, role: 'owner' };
                await setDoc(docRef, remoteState);
             }
+            isInitialRemoteLoadRef.current = true;
             setState(remoteState);
             setIsStateLoaded(true);
             localStorage.setItem(STORE_KEY, JSON.stringify(remoteState));
+            setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+            setLastSyncedAt(new Date().toISOString());
+            if (fallbackTimer) clearTimeout(fallbackTimer);
           } else {
             // Document doesn't exist, check if local state needs migrating
             const localRaw = localStorage.getItem(STORE_KEY);
@@ -226,19 +270,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                isMigratingRef.current = true;
                await setDoc(docRef, dataToUpload);
                isMigratingRef.current = false;
+               isInitialRemoteLoadRef.current = true;
                setState(dataToUpload);
             } else {
                await setDoc(docRef, dataToUpload);
+               isInitialRemoteLoadRef.current = true;
                setState(dataToUpload);
             }
             setIsStateLoaded(true);
+            setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+            setLastSyncedAt(new Date().toISOString());
+            if (fallbackTimer) clearTimeout(fallbackTimer);
           }
         } catch (error) {
           console.error("Error syncing with Firestore:", error);
           setIsStateLoaded(true);
+          setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+          if (fallbackTimer) clearTimeout(fallbackTimer);
         }
       } else {
         // user logged out or guest mode
+        if (fallbackTimer) clearTimeout(fallbackTimer);
         if (authLoadedRef.current) {
           // This means a user was previously logged in during this session and just logged out
           // Clear their data from local storage so it doesn't leak into guest mode
@@ -252,6 +304,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (unsubscribeBilling) unsubscribeBilling();
         authLoadedRef.current = false;
         setIsStateLoaded(true);
+        setSyncStatus('local');
       }
     });
     } else {
@@ -260,7 +313,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const handleOnline = () => {
       if (auth?.currentUser) {
-        setSyncStatus('syncing'); // or let next sync push set it
+        setSyncStatus('synced');
+        setLastSyncedAt(new Date().toISOString());
       } else {
         setSyncStatus('local');
       }
@@ -277,6 +331,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => {
       unsubscribe();
       if (unsubscribeBilling) unsubscribeBilling();
+      if (fallbackTimer) clearTimeout(fallbackTimer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -286,6 +341,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
+
+      if (isInitialRemoteLoadRef.current) {
+        isInitialRemoteLoadRef.current = false;
+        return;
+      }
 
       if (!navigator.onLine) {
         setSyncStatus('offline');
@@ -305,7 +365,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             })
             .catch(e => {
               console.error('Failed to save to Firestore', e);
-              setSyncStatus('error');
+              setSyncStatus(!navigator.onLine ? 'offline' : 'error');
             });
         }
       } else if (!user) {
@@ -765,12 +825,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setState(prev => ({
       ...prev,
-      students: [...prev.students, ...students],
-      contracts: [...prev.contracts, ...contracts],
-      lessons: [...prev.lessons, ...lessons],
-      payments: [...prev.payments, ...payments],
-      expenses: [...prev.expenses, ...expenses],
-      goals: [...prev.goals, ...goals],
+      students: [...(prev.students || []), ...students],
+      contracts: [...(prev.contracts || []), ...contracts],
+      lessons: [...(prev.lessons || []), ...lessons],
+      payments: [...(prev.payments || []), ...payments],
+      expenses: [...(prev.expenses || []), ...expenses],
+      goals: [...(prev.goals || []), ...goals],
     }));
   }, []);
 

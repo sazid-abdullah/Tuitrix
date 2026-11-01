@@ -277,6 +277,79 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                 );
               })}
             </div>
+
+            {/* 6-Month ৳ SVG Trend Chart */}
+            <div style={{ marginTop: '12px', width: '100%' }}>
+              <svg
+                className="money-trend-svg-chart"
+                viewBox="0 0 300 80"
+                width="100%"
+                height="80"
+                preserveAspectRatio="none"
+                style={{ overflow: 'visible', display: 'block' }}
+                aria-label="6-Month Income Trend Chart"
+              >
+                <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(148, 163, 184, 0.2)" strokeWidth="1" />
+                {series.map((s, idx) => {
+                  const safeMax = maxBar > 0 ? maxBar : 1;
+                  const barWidth = 14;
+                  const groupWidth = 300 / 6;
+                  const xBase = idx * groupWidth + (groupWidth - barWidth * 2 - 4) / 2;
+                  const incH = Math.max(2, Math.min(65, (s.inc / safeMax) * 65));
+                  const expH = Math.max(2, Math.min(65, (s.exp / safeMax) * 65));
+                  const incY = 70 - incH;
+                  const expY = 70 - expH;
+                  return (
+                    <g key={s.k} className="svg-month-group">
+                      <rect
+                        x={Number(xBase.toFixed(2))}
+                        y={Number(incY.toFixed(2))}
+                        width={barWidth}
+                        height={Number(incH.toFixed(2))}
+                        fill="var(--green-main, #10b981)"
+                        rx="3"
+                        opacity={s.inc > 0 ? 0.9 : 0.25}
+                      >
+                        <title>{`Income: ${money(s.inc)}`}</title>
+                      </rect>
+                      <rect
+                        x={Number((xBase + barWidth + 3).toFixed(2))}
+                        y={Number(expY.toFixed(2))}
+                        width={barWidth}
+                        height={Number(expH.toFixed(2))}
+                        fill="var(--red-main, #ef4444)"
+                        rx="3"
+                        opacity={s.exp > 0 ? 0.85 : 0.25}
+                      >
+                        <title>{`Expense: ${money(s.exp)}`}</title>
+                      </rect>
+                    </g>
+                  );
+                })}
+                {(() => {
+                  const safeMax = maxBar > 0 ? maxBar : 1;
+                  const points = series.map((s, idx) => {
+                    const groupWidth = 300 / 6;
+                    const x = idx * groupWidth + groupWidth / 2;
+                    const h = Math.max(2, Math.min(65, (s.inc / safeMax) * 65));
+                    const y = 70 - h;
+                    return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
+                  });
+                  const d = points.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
+                  return (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke="var(--green-main, #10b981)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity="0.7"
+                    />
+                  );
+                })()}
+              </svg>
+            </div>
           </div>
 
           {!isPro && (

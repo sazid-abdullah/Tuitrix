@@ -62,7 +62,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ isOpen, onClos
   if (!isOpen) return null;
 
   return (
-    <>
+    <div id="modal-root">
       <div className="modal-backdrop"></div>
       <div className="modal" style={{ maxWidth: '480px', textAlign: 'center' }}>
         <div className="modal-head">
@@ -111,6 +111,6 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ isOpen, onClos
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 };

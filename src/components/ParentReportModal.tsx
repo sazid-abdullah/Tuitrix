@@ -15,6 +15,7 @@ interface ParentReportModalProps {
 
 export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, onClose, student }) => {
   const { state, money, toast } = useStore();
+  const [waLang, setWaLang] = React.useState<'en' | 'bn'>('en');
 
   const lessons = useMemo(() => {
     return state.lessons
@@ -58,7 +59,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
 
     const text = generateWhatsAppMessage({
       studentName: student.name,
-      lang: 'en',
+      lang: waLang,
       completedClasses: cStatus?.taught !== undefined && activeContract?.cycleType === 'classes' ? cStatus.taught - (cStatus.completed * activeContract.cycleLength) : lessons.filter(l => l.status === 'taught').length,
       targetClasses: activeContract?.cycleLength || 'N/A',
       lastClassDate: lastClass ? fmtDate(lastClass.date) : undefined,
@@ -203,7 +204,8 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
 
         <div className="actions" style={{ marginTop: '32px' }}>
           <button className="btn primary" onClick={handlePrint}>Print / Save as PDF</button>
-          <button className="btn" onClick={handleSendWhatsApp}>Send Report on WhatsApp</button>
+          <button className="btn" onClick={handleSendWhatsApp}>💬 WhatsApp ({waLang === 'en' ? 'EN' : 'বাংলা'})</button>
+          <button className="btn ghost" onClick={() => setWaLang(waLang === 'en' ? 'bn' : 'en')} title="Toggle Language">🌐</button>
         </div>
       </div>
     </Modal>

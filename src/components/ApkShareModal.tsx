@@ -52,7 +52,7 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
   const whatsappUrl = `https://wa.me/?text=${shareText}`;
 
   return (
-    <>
+    <div id="modal-root">
       <div className="modal-backdrop" onClick={onClose}></div>
       <div className="modal" style={{ maxWidth: '420px', textAlign: 'center', paddingBottom: '24px' }}>
         <div className="modal-head">
@@ -85,6 +85,6 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
 
         </div>
       </div>
-    </>
+    </div>
   );
 };

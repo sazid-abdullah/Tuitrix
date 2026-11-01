@@ -2,38 +2,82 @@ import React, { useState, useEffect } from 'react';
 import { PricingConfig } from '../types';
 import { fetchPricingConfig } from '../services/firebase';
 import { ApkShareModal } from '../components/ApkShareModal';
+import { useStore } from '../store/context';
+import { isProUser } from '../utils/tierLimits';
 
 interface LandingViewProps {
   onEnterApp: () => void;
   onSignIn: () => void;
+  embedded?: boolean;
 }
 
-export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }) => {
+export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, embedded = false }) => {
+  let user: { email: string | null } | null = null;
+  let billingState: any = null;
+  let storeState: any = null;
+  let storeUpdateSettings: ((settings: any) => void) | null = null;
+  try {
+    const store = useStore();
+    user = store?.user || null;
+    billingState = store?.billingState || null;
+    storeState = store?.state || null;
+    storeUpdateSettings = store?.updateSettings || null;
+  } catch {
+    user = null;
+    billingState = null;
+  }
+
   const [lang, setLang] = useState<'EN' | 'BN'>('EN');
   const [activeTab, setActiveTab] = useState(1);
   const [cycleClicks, setCycleClicks] = useState(11);
   const [showEnReport, setShowEnReport] = useState(false);
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const storeTheme = storeState?.settings?.theme;
+  const [theme, setTheme] = useState<'dark' | 'light'>(storeTheme || 'dark');
+  const currentTheme = storeTheme || theme;
   const [apkModalOpen, setApkModalOpen] = useState(false);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('tuitrix_theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
+    if (storeTheme) {
+      setTheme(storeTheme);
+    } else {
+      const savedTheme = localStorage.getItem('tuitrix_theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
+    }
+  }, [storeTheme]);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail && (e.detail === 'EN' || e.detail === 'BN')) {
+        setLang(e.detail);
+      }
+    };
+    window.addEventListener('tuitrix_lang_change', handler);
+    return () => window.removeEventListener('tuitrix_lang_change', handler);
   }, []);
 
+  const handleToggleLang = () => {
+    const nextLang = lang === 'EN' ? 'BN' : 'EN';
+    setLang(nextLang);
+    window.dispatchEvent(new CustomEvent('tuitrix_lang_change', { detail: nextLang }));
+  };
+
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    localStorage.setItem('tuitrix_theme', newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-    if (newTheme === 'light') {
-      document.body.classList.add('light-theme');
-      document.body.classList.remove('dark-theme');
+    if (storeUpdateSettings) {
+      storeUpdateSettings({ theme: newTheme });
     } else {
-      document.body.classList.add('dark-theme');
-      document.body.classList.remove('light-theme');
+      localStorage.setItem('tuitrix_theme', newTheme);
+      document.documentElement.setAttribute('data-theme', newTheme);
+      if (newTheme === 'light') {
+        document.body.classList.add('light-theme');
+        document.body.classList.remove('dark-theme');
+      } else {
+        document.body.classList.add('dark-theme');
+        document.body.classList.remove('light-theme');
+      }
     }
   };
 
@@ -42,36 +86,76 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
   }, []);
 
   const monthlyPriceBdtStr = pricingConfig ? `৳${pricingConfig.monthlyPriceBdt}` : '৳199';
-
+  const isPro = user ? isProUser(billingState, user.email) : false;
 
   return (
-    <div className="landing-container">
-      {/* Header */}
-      <header className="landing-header">
-        <div className="landing-logo">
-          <svg width="28" height="28" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="bg_nav" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#161922"/>
-                <stop offset="100%" stopColor="#0b0d14"/>
-              </linearGradient>
-            </defs>
-            <rect width="512" height="512" rx="128" fill="url(#bg_nav)"/>
-            <path d="M160 120 L352 120 L256 400 Z" fill="#5b8cff"/>
-            <path d="M160 120 L352 120 L256 260 Z" fill="#3ecf8e" opacity="0.9"/>
-          </svg>
-          <span className="brand-name">Tuitrix</span>
-        </div>
-        <div className="landing-nav">
-          <button className="lang-toggle" onClick={toggleTheme} title="Toggle Theme" style={{ padding: '6px' }}>
-            {theme === 'light' ? '🌙' : '☀️'}
-          </button>
-          <button className="lang-toggle" onClick={() => setLang(lang === 'EN' ? 'BN' : 'EN')}>
-            {lang === 'EN' ? 'বাংলা' : 'English'}
-          </button>
-          <button className="nav-signin" onClick={onSignIn}>Sign In</button>
-        </div>
-      </header>
+    <div className={`landing-container ${embedded ? 'landing-embedded' : ''}`}>
+      {/* Standalone Header: Only rendered when NOT embedded inside App shell */}
+      {!embedded && (
+        <header className="landing-header">
+          <div className="landing-logo">
+            <svg width="28" height="28" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="bg_landing" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#161922"/>
+                  <stop offset="100%" stopColor="#0b0d14"/>
+                </linearGradient>
+                <linearGradient id="grad1_landing" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#00f2fe"/>
+                  <stop offset="100%" stopColor="#4facfe"/>
+                </linearGradient>
+                <linearGradient id="grad2_landing" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4facfe"/>
+                  <stop offset="100%" stopColor="#0015ff"/>
+                </linearGradient>
+                <linearGradient id="grad3_landing" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#00f2fe"/>
+                  <stop offset="100%" stopColor="#0015ff"/>
+                </linearGradient>
+                <linearGradient id="gradStemRight_landing" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4facfe"/>
+                  <stop offset="100%" stopColor="#0015ff"/>
+                </linearGradient>
+                <linearGradient id="gradStemLeft_landing" x1="100%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#00f2fe"/>
+                  <stop offset="100%" stopColor="#4facfe"/>
+                </linearGradient>
+              </defs>
+              <rect width="512" height="512" rx="112" fill="url(#bg_landing)"/>
+              <g transform="translate(256, 216)">
+                <path d="M 0 -90 L -130 -90 L -170 -40 L -40 -40 Z" fill="url(#grad1_landing)" opacity="0.8" />
+                <path d="M 0 -90 L 130 -90 L 170 -40 L 40 -40 Z" fill="url(#grad2_landing)" opacity="0.9" />
+                <path d="M -40 -40 L -170 -40 L -130 10 L 0 10 Z" fill="url(#grad3_landing)" />
+                <path d="M 40 -40 L 170 -40 L 130 10 L 0 10 Z" fill="url(#grad2_landing)" />
+                <polygon points="0,-70 40,-40 0,10 -40,-40" fill="url(#grad1_landing)" opacity="0.95" />
+                <polygon points="0,-45 18,-30 0,-5 -18,-30" fill="#00f2fe" />
+                <path d="M 0 10 L -40 10 L -90 150 L 0 150 Z" fill="url(#gradStemLeft_landing)" />
+                <path d="M 0 10 L 40 10 L 90 150 L 0 150 Z" fill="url(#gradStemRight_landing)" />
+                <polygon points="-90,150 90,150 60,170 -60,170" fill="#00f2fe" opacity="0.8" />
+                <polyline points="-130,-90 -170,-40 -130,10" fill="none" stroke="#00f2fe" strokeWidth="3" opacity="0.8" />
+                <polyline points="130,-90 170,-40 130,10" fill="none" stroke="#00f2fe" strokeWidth="3" opacity="0.8" />
+                <line x1="-90" y1="150" x2="-60" y2="170" stroke="#00f2fe" strokeWidth="3" opacity="0.8" />
+                <line x1="90" y1="150" x2="60" y2="170" stroke="#00f2fe" strokeWidth="3" opacity="0.8" />
+                <line x1="0" y1="10" x2="0" y2="150" stroke="#00f2fe" strokeWidth="2" opacity="0.4" />
+              </g>
+            </svg>
+            <span className="brand-name">Tuitrix</span>
+          </div>
+          <div className="landing-nav">
+            <button className="lang-toggle" onClick={toggleTheme} title="Toggle Theme" style={{ padding: '6px' }}>
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
+            <button className="lang-toggle" onClick={handleToggleLang}>
+              {lang === 'EN' ? 'বাংলা' : 'English'}
+            </button>
+            {user ? (
+              <button className="nav-signin" onClick={onEnterApp}>Dashboard</button>
+            ) : (
+              <button className="nav-signin" onClick={onSignIn}>Sign In</button>
+            )}
+          </div>
+        </header>
+      )}
 
       {/* Hero Section */}
       <section className="hero">
@@ -86,14 +170,36 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
               ? 'Track 12-class or monthly tuition cycles, log batch progress in 1 tap, send verified Bangla/English WhatsApp parent reports, and generate print-ready PDF exam sheets with AI.'
               : '১২-ক্লাস বা মাসিক টিউশন সাইকেল ট্র্যাক করুন, ১ ক্লিকে ব্যাচ হাজিরা নিন, হোয়াটসঅ্যাপে রেজাল্ট পাঠান এবং এআই দিয়ে পরীক্ষার প্রশ্ন তৈরি করুন।'}
           </p>
-          <div className="hero-ctas">
-            <button className="cta-primary" onClick={onEnterApp}>
-              🚀 {lang === 'EN' ? 'Start Free — No Card Needed' : 'ফ্রি শুরু করুন — কোনো কার্ড লাগবে না'}
-            </button>
-            <button className="cta-secondary" onClick={onSignIn}>
-              🔑 {lang === 'EN' ? 'Sign In / Create Cloud Account' : 'লগইন / নতুন একাউন্ট'}
-            </button>
-          </div>
+
+          {/* Auth-Aware Hero CTA Buttons */}
+          {user ? (
+            <div className="hero-ctas">
+              <button className="cta-primary" onClick={onEnterApp}>
+                🚀 {lang === 'EN' ? 'Go to Dashboard' : 'ড্যাশবোর্ডে যান'}
+              </button>
+              <button
+                className="cta-secondary"
+                onClick={() => {
+                  const el = document.getElementById('features-showcase');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                title={user.email || ''}
+              >
+                👤 {lang === 'EN' ? `Signed in as ${user.email?.split('@')[0] || user.email}` : `লগইন আছেন: ${user.email?.split('@')[0] || user.email}`}
+              </button>
+            </div>
+          ) : (
+            <div className="hero-ctas">
+              <button className="cta-primary" onClick={onEnterApp}>
+                🚀 {lang === 'EN' ? 'Start Free — No Card Needed' : 'ফ্রি শুরু করুন — কোনো কার্ড লাগবে না'}
+              </button>
+              <button className="cta-secondary" onClick={onSignIn}>
+                🔑 {lang === 'EN' ? 'Sign In / Create Cloud Account' : 'লগইন / নতুন একাউন্ট'}
+              </button>
+            </div>
+          )}
+
+          {/* Android APK Download */}
           <div style={{ marginTop: '20px' }}>
             <button className="btn outline" onClick={() => setApkModalOpen(true)} style={{ background: 'var(--surface)', borderColor: 'var(--green)', color: 'var(--green)' }}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: '6px' }}>
@@ -106,7 +212,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
       </section>
 
       {/* Interactive Feature Showcase */}
-      <section className="showcase">
+      <section id="features-showcase" className="showcase">
         <h2>{lang === 'EN' ? 'See It In Action' : 'কার্যকারিতা দেখুন'}</h2>
         <div className="showcase-widget">
           <div className="showcase-tabs">
@@ -223,7 +329,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
               <li>Cloud Sync across devices</li>
             </ul>
             <button className="cta-outline" onClick={onEnterApp}>
-              {lang === 'EN' ? 'Start Free' : 'ফ্রি শুরু করুন'}
+              {user ? (lang === 'EN' ? (isPro ? 'Included in Pro' : 'Current Plan') : (isPro ? 'প্রো-তে অন্তর্ভুক্ত' : 'বর্তমান প্ল্যান')) : (lang === 'EN' ? 'Start Free' : 'ফ্রি শুরু করুন')}
             </button>
           </div>
 
@@ -244,8 +350,10 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
               <span className="nagad-badge">Nagad</span>
               <span className="rocket-badge">Rocket</span>
             </div>
-            <button className="cta-primary" onClick={onSignIn}>
-              {lang === 'EN' ? 'Get Pro via TrxID' : 'প্রো কিনুন'}
+            <button className="cta-primary" onClick={user ? onEnterApp : onSignIn}>
+              {isPro
+                ? (lang === 'EN' ? 'Pro Activated ✨' : 'প্রো সক্রিয় ✨')
+                : (lang === 'EN' ? 'Get Pro via TrxID' : 'প্রো কিনুন')}
             </button>
           </div>
         </div>
@@ -287,8 +395,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn }
         <div className="footer-content">
           <div className="footer-brand">Tuitrix &copy; {new Date().getFullYear()}</div>
           <div className="footer-links" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-            <button onClick={onEnterApp}>Launch App</button>
-            <button onClick={onSignIn}>Sign In</button>
+            {!embedded && <button onClick={onEnterApp}>Launch App</button>}
+            {!user && <button onClick={onSignIn}>Sign In</button>}
             <button onClick={() => window.location.href = '?legal=privacy'}>Privacy Policy</button>
             <button onClick={() => window.location.href = '?legal=terms'}>Terms of Service</button>
             <button onClick={() => window.location.href = '?legal=billing'}>Refund Policy</button>

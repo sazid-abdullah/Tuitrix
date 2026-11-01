@@ -399,6 +399,7 @@ export const App: React.FC = () => {
               handleEnterApp();
               setAuthModalOpen(true);
             }}
+            embedded={true}
           />
         )}
       </main>
