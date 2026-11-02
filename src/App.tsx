@@ -30,10 +30,11 @@ import { SettingsView } from './views/SettingsView';
 import { LandingView } from './views/LandingView';
 
 import { Student, Contract, Lesson, Payment, Expense, Goal, SavedDoc } from './types';
-import { fmtClock } from './utils/date';
+import { fmtClock, uid } from './utils/date';
+import { callAI, EXAM_JSON_SYSTEM, examJsonPrompt, normalizeExam, parseAiJson } from './services/ai';
 
 export const App: React.FC = () => {
-  const { state, isStateLoaded } = useStore();
+  const { state, isStateLoaded, saveAttempt, saveExam, saveDoc, saveAiResource, toast } = useStore();
 
   // Route state parsed from location.hash
   const [route, setRoute] = useState<string>('home');
@@ -101,6 +102,8 @@ export const App: React.FC = () => {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [lessonOpts, setLessonOpts] = useState<{
     studentId?: string;
+    batchId?: string;
+    date?: string;
     time?: string;
     duration?: number;
     status?: any;
@@ -178,11 +181,29 @@ export const App: React.FC = () => {
     }
   };
 
+  // Auto-clean any orphaned running attempts
+  useEffect(() => {
+    if (!isStateLoaded) return;
+    const now = Date.now();
+    const orphans = state.attempts.filter(
+      a => a.status === 'running' && (!state.exams.some(e => e.id === a.examId) || a.endsAt <= now)
+    );
+    if (orphans.length > 0) {
+      orphans.forEach(a => {
+        saveAttempt({
+          ...a,
+          status: 'submitted',
+          submittedAt: a.submittedAt || now,
+        });
+      });
+    }
+  }, [isStateLoaded, state.attempts, state.exams, saveAttempt]);
+
   const requiresOnboarding = isStateLoaded && isAuthenticated && (!state.profile || !state.profile.brandTitle);
 
-  // Check for running exams
+  // Check for running exams strictly
   const runningExam = state.attempts.find(
-    a => a.status === 'running' && a.endsAt > Date.now()
+    a => a.status === 'running' && a.endsAt > Date.now() && state.exams.some(e => e.id === a.examId)
   );
 
   if (showLanding) {
@@ -231,6 +252,17 @@ export const App: React.FC = () => {
             >
               Go back to the exam
             </a>
+            <button
+              type="button"
+              className="btn xs ghost"
+              style={{ marginLeft: '10px' }}
+              onClick={() => {
+                saveAttempt({ ...runningExam, status: 'submitted', submittedAt: Date.now() });
+                toast('Exam session ended', 'info');
+              }}
+            >
+              End exam
+            </button>
           </div>
         )}
 
@@ -348,31 +380,51 @@ export const App: React.FC = () => {
         {route === 'ai' && (
           <AIView
             onNavigate={navigate}
-            onStartExam={(doc: SavedDoc) => {
-              // Start exam attempt
-              const now = Date.now();
-              const existingExam = state.exams.find(e => e.docId === doc.id);
-              const examId = existingExam?.id || doc.id;
-              const duration = existingExam?.duration || 60;
+            onStartExam={async (doc: SavedDoc) => {
+              try {
+                let existingExam = state.exams.find(e => e.docId === doc.id || e.id === doc.id);
+                if (!existingExam) {
+                  toast('Preparing interactive exam questions with AI…', 'info');
+                  const rawJson = await callAI(EXAM_JSON_SYSTEM, examJsonPrompt(doc.content), state, {
+                    temperature: 0.1,
+                    json: true,
+                  });
+                  const parsed = normalizeExam(parseAiJson(rawJson));
+                  const newExam = {
+                    ...parsed,
+                    id: uid(),
+                    docId: doc.id,
+                    title: doc.title,
+                    createdAt: new Date().toISOString(),
+                  };
+                  saveExam(newExam);
+                  existingExam = newExam;
+                }
 
-              const attemptId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-              const newAttempt = {
-                id: attemptId,
-                examId,
-                title: doc.title,
-                studentId: doc.studentId || null,
-                startedAt: now,
-                endsAt: now + duration * 60000,
-                submittedAt: null,
-                auto: false,
-                status: 'running' as const,
-                answers: {},
-                marks: {},
-                aiMarks: {},
-              };
+                const now = Date.now();
+                const duration = existingExam.duration || 60;
+                const attemptId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                const newAttempt = {
+                  id: attemptId,
+                  examId: existingExam.id,
+                  title: doc.title,
+                  studentId: doc.studentId || null,
+                  startedAt: now,
+                  endsAt: now + duration * 60000,
+                  submittedAt: null,
+                  auto: false,
+                  status: 'running' as const,
+                  answers: {},
+                  marks: {},
+                  aiMarks: {},
+                };
 
-              state.attempts.push(newAttempt);
-              navigate('exam', attemptId);
+                saveAttempt(newAttempt);
+                navigate('exam', attemptId);
+              } catch (err: any) {
+                console.error('Failed to start exam:', err);
+                toast(err.message || 'Failed to start exam', 'error');
+              }
             }}
             onUploadPaper={() => {
               setUploadStudentId('');
@@ -432,6 +484,8 @@ export const App: React.FC = () => {
         isOpen={lessonModalOpen}
         lesson={selectedLesson}
         initialStudentId={lessonOpts.studentId}
+        initialBatchId={lessonOpts.batchId}
+        initialDate={lessonOpts.date}
         initialTime={lessonOpts.time}
         initialDuration={lessonOpts.duration}
         initialStatus={lessonOpts.status}
@@ -475,7 +529,7 @@ export const App: React.FC = () => {
         initialStudentId={uploadStudentId}
         onClose={() => setUploadPaperModalOpen(false)}
         onExamReady={(docId, examId) => {
-          navigate('ai', `tool=saved&doc=${docId}`);
+          navigate('ai', 'tool=library');
         }}
       />
 

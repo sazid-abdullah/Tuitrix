@@ -182,11 +182,42 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const todaysLessons = state.lessons.filter(l => l.date === today);
 
   // Scheduled classes for today
+  const dayName = WEEKDAYS[dow];
   const scheduled: Array<{ s: Student; slot: { day: number; time: string; duration: number }; lesson?: Lesson }> = [];
   for (const s of activeStudents) {
+    let hasSlot = false;
     for (const slot of s.schedule || []) {
       if (Number(slot.day) === dow) {
         scheduled.push({ s, slot });
+        hasSlot = true;
+      }
+    }
+    if (!hasSlot && s.scheduleDays?.includes(dayName)) {
+      scheduled.push({ s, slot: { day: dow, time: s.scheduleTime || '', duration: 60 } });
+    }
+  }
+
+  // Include batch schedules for active students
+  for (const b of (state.batches || []).filter(b => b.active !== false)) {
+    let batchScheduledToday = false;
+    let bSlot = { day: dow, time: b.scheduleTime || '', duration: 60 };
+    for (const slot of b.schedule || []) {
+      if (Number(slot.day) === dow) {
+        batchScheduledToday = true;
+        bSlot = slot;
+        break;
+      }
+    }
+    if (!batchScheduledToday && b.scheduleDays?.includes(dayName)) {
+      batchScheduledToday = true;
+    }
+
+    if (batchScheduledToday) {
+      for (const sid of b.studentIds) {
+        const s = activeStudents.find(st => st.id === sid);
+        if (s && !scheduled.some(item => item.s.id === s.id && item.slot.time === bSlot.time)) {
+          scheduled.push({ s, slot: bSlot });
+        }
       }
     }
   }
@@ -213,7 +244,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
   // Next step logic to inject Radar banner
   const radarStudents = activeStudents.filter(s => {
     // Show students scheduled today who haven't had a lesson yet
-    const hasScheduleToday = s.schedule?.some(slot => Number(slot.day) === dow);
+    const hasIndividualSchedule = s.schedule?.some(slot => Number(slot.day) === dow) || s.scheduleDays?.includes(dayName);
+    const hasBatchSchedule = (state.batches || []).some(
+      b => b.active !== false && b.studentIds.includes(s.id) && (
+        b.schedule?.some(slot => Number(slot.day) === dow) || b.scheduleDays?.includes(dayName)
+      )
+    );
+    const hasScheduleToday = Boolean(hasIndividualSchedule || hasBatchSchedule);
     const hasLessonToday = todaysLessons.some(l => l.studentId === s.id);
     return hasScheduleToday && !hasLessonToday;
   });

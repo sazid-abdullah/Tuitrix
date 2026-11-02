@@ -52,14 +52,99 @@ function writeModelCache(c: Record<string, any>) {
   }
 }
 
-export function autoModel(provider: 'gemini' | 'groq' | 'openrouter' | 'ollama', state: AppState): string {
-  if (state.ai.models[provider]) return state.ai.models[provider];
-  const cache = readModelCache()[provider];
-  if (cache && Array.isArray(cache.list) && cache.list.length > 0) {
-    const first = cache.list[0];
-    return typeof first === 'object' && first !== null && first.id ? first.id : String(first);
-  }
+export function sanitizeModelId(raw: string): string {
+  if (!raw) return '';
+  // Strip any label text after em-dash, en-dash, or parentheses if accidentally stored
+  let cleaned = String(raw).trim();
+  if (cleaned.includes('—')) cleaned = cleaned.split('—')[0].trim();
+  if (cleaned.includes('–')) cleaned = cleaned.split('–')[0].trim();
+  if (/^auto\b/i.test(cleaned)) return '';
+  cleaned = cleaned.replace(/^models\//, '').replace(/[^a-zA-Z0-9._:-]/g, '');
+  return cleaned;
+}
+
+export function getDefaultModel(provider: 'gemini' | 'groq' | 'openrouter' | 'ollama'): string {
   return AI_PROVIDERS[provider]?.fallback || '';
+}
+
+export function autoModel(provider: 'gemini' | 'groq' | 'openrouter' | 'ollama', state: AppState): string {
+  const userSelected = sanitizeModelId(state.ai?.models?.[provider] || '');
+  if (userSelected) return userSelected;
+  return getDefaultModel(provider);
+}
+
+export function parseAiJson(raw: string): any {
+  const t = String(raw || '').trim();
+  // 1. Try direct parse first
+  try { return JSON.parse(t); } catch {}
+  // 2. Strip markdown code fences if present
+  const fenceMatch = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+  }
+  // 3. Extract outermost JSON object { ... }
+  const firstBrace = t.indexOf('{');
+  const lastBrace = t.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const candidate = t.slice(firstBrace, lastBrace + 1);
+    try { return JSON.parse(candidate); } catch {}
+  }
+  throw new Error('AI did not return valid JSON. Please try again or use a clearer question paper.');
+}
+
+export async function extractFileText(file: File): Promise<string> {
+  if (/\.docx$/i.test(file.name)) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const view = new DataView(buf);
+    let offset = 0;
+    const decoder = new TextDecoder('utf-8');
+    while (offset + 30 <= bytes.length) {
+      const sig = view.getUint32(offset, true);
+      if (sig !== 0x04034b50) break; // Local file header signature
+      const compression = view.getUint16(offset + 8, true);
+      const compressedSize = view.getUint32(offset + 18, true);
+      const fileNameLen = view.getUint16(offset + 26, true);
+      const extraLen = view.getUint16(offset + 28, true);
+      const nameBytes = bytes.subarray(offset + 30, offset + 30 + fileNameLen);
+      const entryName = decoder.decode(nameBytes);
+      const dataStart = offset + 30 + fileNameLen + extraLen;
+      const dataEnd = dataStart + compressedSize;
+      if (entryName === 'word/document.xml' && dataEnd <= bytes.length) {
+        const rawSlice = bytes.subarray(dataStart, dataEnd);
+        let xmlText = '';
+        if (compression === 0) {
+          xmlText = decoder.decode(rawSlice);
+        } else if (compression === 8 && typeof DecompressionStream !== 'undefined') {
+          const ds = new DecompressionStream('deflate-raw');
+          const writer = ds.writable.getWriter();
+          writer.write(rawSlice);
+          writer.close();
+          const decompressedBuf = await new Response(ds.readable).arrayBuffer();
+          xmlText = decoder.decode(decompressedBuf);
+        }
+        if (xmlText) {
+          const cleaned = xmlText
+            .replace(/<\/w:p>/g, '\n')
+            .replace(/<w:br[^>]*\/>/g, '\n')
+            .replace(/<w:tab[^>]*\/>/g, '\t')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+          if (cleaned) return cleaned;
+        }
+      }
+      if (compressedSize === 0) break;
+      offset = dataEnd;
+    }
+    throw new Error('Could not extract text from this .docx file. Please save as PDF or .txt and upload.');
+  }
+  return await file.text();
 }
 
 export async function detectGeminiBillingTier(apiKey: string): Promise<'free' | 'paid'> {

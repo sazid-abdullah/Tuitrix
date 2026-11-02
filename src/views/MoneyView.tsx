@@ -62,8 +62,8 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
   }).reduce((a, p) => a + Number(p.amount || 0), 0);
   const pays1on1 = income - paysBatch;
 
-  const batchPercent = income > 0 ? Math.round((paysBatch / income) * 100) : 0;
-  const on1Percent = income > 0 ? 100 - batchPercent : 0;
+  const batchPercent = income > 0 ? Math.round((Number(paysBatch || 0) / Math.max(1, income)) * 100) : 0;
+  const on1Percent = income > 0 ? Math.max(0, 100 - batchPercent) : 0;
 
   const snap: MoneySnapshotResult = moneySnapshot(state);
 
@@ -74,10 +74,11 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
   }
   const series = months.map(k => ({
     k,
-    inc: state.payments.filter(p => monthKey(p.date) === k).reduce((a, p) => a + Number(p.amount || 0), 0),
-    exp: state.expenses.filter(x => monthKey(x.date) === k).reduce((a, x) => a + Number(x.amount || 0), 0),
+    inc: state.payments.filter(p => monthKey(p.date) === k).reduce((a, p) => a + (Number(p.amount) || 0), 0),
+    exp: state.expenses.filter(x => monthKey(x.date) === k).reduce((a, x) => a + (Number(x.amount) || 0), 0),
   }));
-  const maxBar = Math.max(1, ...series.map(x => Math.max(x.inc, x.exp)));
+  const rawMax = Math.max(1, ...series.map(x => Math.max(Number(x.inc) || 0, Number(x.exp) || 0)));
+  const maxBar = Math.max(1, isNaN(rawMax) ? 1 : rawMax);
 
   const { billingState, state: appState } = useStore();
   const isPro = isProUser(billingState, appState.settings.tutorName);
@@ -258,8 +259,12 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
             <div className="title" style={{ marginBottom: '8px', fontWeight: 'bold' }}>6-Month Trend</div>
             <div style={{ height: '150px', display: 'flex', alignItems: 'flex-end', gap: '8px', padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
               {series.map(s => {
-                const incHeight = Math.max(1, (s.inc / maxBar) * 100);
-                const expHeight = Math.max(1, (s.exp / maxBar) * 100);
+                const incVal = Number(s.inc) || 0;
+                const expVal = Number(s.exp) || 0;
+                const rawIncH = (incVal / Math.max(1, maxBar)) * 100;
+                const rawExpH = (expVal / Math.max(1, maxBar)) * 100;
+                const incHeight = Math.max(1, Math.min(100, isNaN(rawIncH) ? 1 : rawIncH));
+                const expHeight = Math.max(1, Math.min(100, isNaN(rawExpH) ? 1 : rawExpH));
                 return (
                   <div key={s.k} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: '2px', position: 'relative' }}>
                     <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', gap: '2px', height: '100%' }}>
@@ -291,12 +296,14 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
               >
                 <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(148, 163, 184, 0.2)" strokeWidth="1" />
                 {series.map((s, idx) => {
-                  const safeMax = maxBar > 0 ? maxBar : 1;
+                  const safeMax = Math.max(1, maxBar || 1);
                   const barWidth = 14;
                   const groupWidth = 300 / 6;
                   const xBase = idx * groupWidth + (groupWidth - barWidth * 2 - 4) / 2;
-                  const incH = Math.max(2, Math.min(65, (s.inc / safeMax) * 65));
-                  const expH = Math.max(2, Math.min(65, (s.exp / safeMax) * 65));
+                  const rawIncH = ((Number(s.inc) || 0) / safeMax) * 65;
+                  const rawExpH = ((Number(s.exp) || 0) / safeMax) * 65;
+                  const incH = Math.max(2, Math.min(65, isNaN(rawIncH) ? 2 : rawIncH));
+                  const expH = Math.max(2, Math.min(65, isNaN(rawExpH) ? 2 : rawExpH));
                   const incY = 70 - incH;
                   const expY = 70 - expH;
                   return (
@@ -327,11 +334,12 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                   );
                 })}
                 {(() => {
-                  const safeMax = maxBar > 0 ? maxBar : 1;
+                  const safeMax = Math.max(1, maxBar || 1);
                   const points = series.map((s, idx) => {
                     const groupWidth = 300 / 6;
                     const x = idx * groupWidth + groupWidth / 2;
-                    const h = Math.max(2, Math.min(65, (s.inc / safeMax) * 65));
+                    const rawH = ((Number(s.inc) || 0) / safeMax) * 65;
+                    const h = Math.max(2, Math.min(65, isNaN(rawH) ? 2 : rawH));
                     const y = 70 - h;
                     return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
                   });
@@ -537,24 +545,30 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
             </div>
           </div>
           <div className="bars">
-            {series.map(x => (
-              <div
-                key={x.k}
-                className="bar-col"
-                title={`${fmtMonth(x.k)}: +${money(x.inc)} / -${money(x.exp)}`}
-              >
-                <div className="bar-pair">
-                  <div className="bar" style={{ height: `${(x.inc / maxBar) * 100}%` }} />
-                  <div
-                    className="bar exp"
-                    style={{ height: `${(x.exp / maxBar) * 100}%` }}
-                  />
+            {series.map(x => {
+              const rawIncH = ((Number(x.inc) || 0) / Math.max(1, maxBar)) * 100;
+              const rawExpH = ((Number(x.exp) || 0) / Math.max(1, maxBar)) * 100;
+              const incHeight = Math.max(0, Math.min(100, isNaN(rawIncH) ? 0 : rawIncH));
+              const expHeight = Math.max(0, Math.min(100, isNaN(rawExpH) ? 0 : rawExpH));
+              return (
+                <div
+                  key={x.k}
+                  className="bar-col"
+                  title={`${fmtMonth(x.k)}: +${money(x.inc)} / -${money(x.exp)}`}
+                >
+                  <div className="bar-pair">
+                    <div className="bar" style={{ height: `${incHeight}%` }} />
+                    <div
+                      className="bar exp"
+                      style={{ height: `${expHeight}%` }}
+                    />
+                  </div>
+                  <div className="bar-label">
+                    {parseISO(x.k + '-01').toLocaleDateString(undefined, { month: 'short' })}
+                  </div>
                 </div>
-                <div className="bar-label">
-                  {parseISO(x.k + '-01').toLocaleDateString(undefined, { month: 'short' })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

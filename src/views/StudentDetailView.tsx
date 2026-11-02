@@ -127,12 +127,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   };
 
   const examScores = student?.examScores || [];
-  const validScores = examScores.filter(s => s.totalMarks > 0).sort((a, b) => b.date.localeCompare(a.date));
+  const validScores = examScores.filter(s => Number(s.totalMarks) > 0).sort((a, b) => b.date.localeCompare(a.date));
   const avgScore = validScores.length > 0
-    ? Math.round(validScores.reduce((sum, s) => sum + (s.obtainedMarks / s.totalMarks), 0) / validScores.length * 100)
+    ? Math.round(validScores.reduce((sum, s) => {
+        const total = Math.max(1, Number(s.totalMarks) || 1);
+        const got = Math.max(0, Number(s.obtainedMarks) || 0);
+        return sum + (got / total);
+      }, 0) / validScores.length * 100)
     : 0;
   const highestScore = validScores.length > 0
-    ? Math.max(...validScores.map(s => Math.round((s.obtainedMarks / s.totalMarks) * 100)))
+    ? Math.max(...validScores.map(s => {
+        const total = Math.max(1, Number(s.totalMarks) || 1);
+        const got = Math.max(0, Number(s.obtainedMarks) || 0);
+        return Math.round((got / total) * 100);
+      }))
     : 0;
 
   return (
@@ -348,7 +356,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                         href="#/ai"
                         onClick={e => {
                           e.preventDefault();
-                          onNavigate('ai', `tool=saved&doc=${d.id}`);
+                          onNavigate('ai', `tool=library&doc=${d.id}`);
                         }}
                       >
                         {d.title}
@@ -583,7 +591,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             <h3 style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-light)' }}>Performance Trend</h3>
             <div style={{ height: '120px', display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
               {[...validScores].reverse().map(s => {
-                const percent = Math.round((s.obtainedMarks / s.totalMarks) * 100);
+                const total = Math.max(1, Number(s.totalMarks) || 1);
+                const got = Math.max(0, Number(s.obtainedMarks) || 0);
+                const rawPercent = Math.round((got / total) * 100);
+                const percent = Math.max(0, Math.min(100, isNaN(rawPercent) ? 0 : rawPercent));
                 const height = Math.max(5, percent); // min height 5%
                 const color = percent >= 80 ? 'var(--green-main)' : percent >= 60 ? 'var(--yellow-main)' : 'var(--red-main)';
                 return (
@@ -611,7 +622,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
           <div className="card" style={{ marginBottom: '24px' }}>
             <div className="list">
               {validScores.map(s => {
-                const percent = Math.round((s.obtainedMarks / s.totalMarks) * 100);
+                const total = Math.max(1, Number(s.totalMarks) || 1);
+                const got = Math.max(0, Number(s.obtainedMarks) || 0);
+                const rawPercent = Math.round((got / total) * 100);
+                const percent = Math.max(0, Math.min(100, isNaN(rawPercent) ? 0 : rawPercent));
                 return (
                   <div key={s.id} className="row" style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                     <div className="grow" style={{ flex: 1 }}>

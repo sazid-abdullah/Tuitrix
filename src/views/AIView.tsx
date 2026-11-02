@@ -37,7 +37,6 @@ const AI_TOOLS = {
   exam: 'Exam paper',
   worksheet: 'Worksheet',
   library: 'Saved Library',
-  saved: 'Old Legacy Docs',
   results: 'Exam results',
 };
 
@@ -62,7 +61,25 @@ export const AIView: React.FC<AIViewProps> = ({
   onImportDoc,
 }) => {
   const { state, updateSettings, billingState, toast, saveDoc, deleteDoc, studentName, saveAiResource, deleteAiResource, toggleFavoriteAiResource, setState } = useStore();
-  const [currentTool, setCurrentTool] = useState<string>(initialTool);
+  const [currentTool, setCurrentTool] = useState<string>(
+    initialTool === 'saved' ? 'library' : initialTool
+  );
+
+  useEffect(() => {
+    if (initialTool === 'saved') {
+      setCurrentTool('library');
+    } else if (initialTool) {
+      setCurrentTool(initialTool);
+    }
+  }, [initialTool]);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('tool=saved')) {
+      setCurrentTool('library');
+      window.history.replaceState(null, '', hash.replace('tool=saved', 'tool=library'));
+    }
+  }, []);
   const isPro = isProUser(billingState, state.settings.tutorName);
   const [studentId, setStudentId] = useState(initialStudentId);
 
@@ -112,6 +129,7 @@ export const AIView: React.FC<AIViewProps> = ({
   // Library filters
   const [libraryFilterSearch, setLibraryFilterSearch] = useState('');
   const [libraryFilterType, setLibraryFilterType] = useState('');
+  const [libraryFilterStudent, setLibraryFilterStudent] = useState('');
   const [libraryFilterFavorite, setLibraryFilterFavorite] = useState(false);
 
   // Print Settings
@@ -170,6 +188,39 @@ export const AIView: React.FC<AIViewProps> = ({
       }
     }
   }, [studentId, state.students, state.lessons]);
+
+  // Deep-linking: auto-open viewingDoc if URL hash or search contains doc=<id>
+  useEffect(() => {
+    const handleDocDeepLink = () => {
+      const fullUrl = window.location.hash || window.location.search || window.location.href;
+      const match = fullUrl.match(/[?&/]doc=([^&/#]+)/) || fullUrl.match(/doc=([^&/#]+)/);
+      if (match && match[1]) {
+        const docId = decodeURIComponent(match[1]);
+        const res = state.savedResources?.find(r => r.id === docId);
+        if (res) {
+          setViewingDoc({
+            id: res.id,
+            title: res.title,
+            type: (res.type === 'plan' || res.type === 'worksheet') ? res.type : 'exam',
+            content: res.content,
+            studentId: res.studentId || null,
+            createdAt: res.createdAt,
+          });
+          setCurrentTool('library');
+          return;
+        }
+        const doc = state.docs?.find(d => d.id === docId);
+        if (doc) {
+          setViewingDoc(doc);
+          setCurrentTool('library');
+        }
+      }
+    };
+
+    handleDocDeepLink();
+    window.addEventListener('hashchange', handleDocDeepLink);
+    return () => window.removeEventListener('hashchange', handleDocDeepLink);
+  }, [state.savedResources, state.docs]);
 
   const handleFillTopicsFromLog = () => {
     if (!studentId) {
@@ -474,26 +525,55 @@ export const AIView: React.FC<AIViewProps> = ({
     }, 250);
   };
 
-  const savedDocsList = state.docs
-    .filter(d => !docsFilterType || d.type === docsFilterType)
-    .filter(d => !docsFilterStudent || d.studentId === docsFilterStudent)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
   const attemptsList = state.attempts
     .filter(a => !docsFilterStudent || a.studentId === docsFilterStudent)
     .sort((a, b) => b.startedAt - a.startedAt);
 
-  const libraryList = (state.savedResources || [])
+  // Unified library: merge state.savedResources and state.docs (deduplicated by id)
+  const unifiedResources: Array<SavedAiResource & { studentId?: string | null }> = React.useMemo(() => {
+    const map = new Map<string, SavedAiResource & { studentId?: string | null }>();
+
+    (state.savedResources || []).forEach(r => {
+      const legacyDoc = state.docs.find(d => d.id === r.id);
+      map.set(r.id, {
+        ...r,
+        studentId: (r as any).studentId || legacyDoc?.studentId || null,
+      });
+    });
+
+    (state.docs || []).forEach(d => {
+      if (!map.has(d.id)) {
+        map.set(d.id, {
+          id: d.id,
+          title: d.title,
+          type: d.type,
+          classLevel: d.meta?.grade || '',
+          subject: d.meta?.subject || '',
+          topic: d.meta?.topic || '',
+          content: d.content,
+          createdAt: d.createdAt,
+          studentId: d.studentId || null,
+          isFavorite: false,
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [state.savedResources, state.docs]);
+
+  const libraryList = unifiedResources
     .filter(r => !libraryFilterType || r.type === libraryFilterType)
+    .filter(r => !libraryFilterStudent || r.studentId === libraryFilterStudent)
     .filter(r => !libraryFilterFavorite || r.isFavorite)
     .filter(r => !libraryFilterSearch || [r.title, r.subject, r.topic, r.classLevel].some(f => f?.toLowerCase().includes(libraryFilterSearch.toLowerCase())))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
-  const handleLoadLibraryResource = (r: SavedAiResource) => {
+  const handleLoadLibraryResource = (r: SavedAiResource & { studentId?: string | null }) => {
     // Populate form fields
-    setGrade(r.classLevel);
-    setSubject(r.subject);
-    setTopic(r.topic);
+    setGrade(r.classLevel || '');
+    setSubject(r.subject || '');
+    setTopic(r.topic || '');
+    if (r.studentId) setStudentId(r.studentId);
 
     // Switch to appropriate tool (use fallback if exact match not found, but it usually matches)
     const nextTool = ['plan', 'exam', 'worksheet'].includes(r.type) ? r.type : 'plan';
@@ -504,7 +584,7 @@ export const AIView: React.FC<AIViewProps> = ({
       tool: r.type,
       title: r.title,
       content: r.content,
-      studentId: null,
+      studentId: r.studentId || null,
       savedId: r.id // Important so it knows it's already saved
     });
 
@@ -594,13 +674,13 @@ export const AIView: React.FC<AIViewProps> = ({
         </div>
       ) : currentTool === 'library' ? (
         <div>
-          <div className="toolbar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="toolbar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               type="text"
               placeholder="Search title, subject, topic..."
               value={libraryFilterSearch}
               onChange={e => setLibraryFilterSearch(e.target.value)}
-              style={{ flex: 1, minWidth: '200px' }}
+              style={{ flex: 1, minWidth: '180px' }}
             />
             <select
               value={libraryFilterType}
@@ -612,78 +692,9 @@ export const AIView: React.FC<AIViewProps> = ({
               <option value="exam">Exam paper</option>
               <option value="worksheet">Worksheet</option>
             </select>
-            <button
-              className={`btn ${libraryFilterFavorite ? 'primary' : 'ghost'}`}
-              onClick={() => setLibraryFilterFavorite(!libraryFilterFavorite)}
-              title="Show only favorites"
-            >
-              ⭐ Favorites
-            </button>
-          </div>
-          <div className="card">
-            <div className="list">
-              {libraryList.length === 0 ? (
-                <div className="empty">
-                  Nothing saved in your library yet. Generate a paper or lesson plan and click "Save to Resource Library"!
-                </div>
-              ) : (
-                libraryList.map(r => (
-                  <div key={r.id} className="row">
-                    <div className="grow">
-                      <div className="title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>{r.title}</span>
-                        <span className="badge">{r.subject}</span>
-                        <span className="badge ghost">{AI_TOOLS[r.type as keyof typeof AI_TOOLS] || r.type}</span>
-                      </div>
-                      <div className="meta">
-                        {r.classLevel} • {r.topic} • {fmtDate(r.createdAt.split('T')[0])}
-                      </div>
-                    </div>
-                    <div className="actions" style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        className="btn icon ghost"
-                        onClick={() => toggleFavoriteAiResource(r.id)}
-                        title={r.isFavorite ? "Unfavorite" : "Favorite"}
-                      >
-                        {r.isFavorite ? '⭐' : '☆'}
-                      </button>
-                      <button
-                        className="btn primary sm outline"
-                        onClick={() => handleLoadLibraryResource(r)}
-                      >
-                        Load & Print
-                      </button>
-                      <button
-                        className="btn icon ghost"
-                        onClick={() => deleteAiResource(r.id)}
-                        style={{ color: 'var(--red-main)' }}
-                        title="Delete"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      ) : currentTool === 'saved' ? (
-        <div>
-          <div className="toolbar">
             <select
-              value={docsFilterType}
-              onChange={e => setDocsFilterType(e.target.value)}
-              aria-label="Filter by Type"
-            >
-              <option value="">All types</option>
-              <option value="plan">Lesson plan</option>
-              <option value="exam">Exam paper</option>
-              <option value="worksheet">Worksheet</option>
-            </select>
-            <select
-              value={docsFilterStudent}
-              onChange={e => setDocsFilterStudent(e.target.value)}
+              value={libraryFilterStudent}
+              onChange={e => setLibraryFilterStudent(e.target.value)}
               aria-label="Filter by Student"
             >
               <option value="">All students</option>
@@ -693,6 +704,13 @@ export const AIView: React.FC<AIViewProps> = ({
                 </option>
               ))}
             </select>
+            <button
+              className={`btn ${libraryFilterFavorite ? 'primary' : 'ghost'}`}
+              onClick={() => setLibraryFilterFavorite(!libraryFilterFavorite)}
+              title="Show only favorites"
+            >
+              ⭐ Favorites
+            </button>
             <button className="btn primary" onClick={onUploadPaper}>
               Upload question paper
             </button>
@@ -702,30 +720,107 @@ export const AIView: React.FC<AIViewProps> = ({
           </div>
           <div className="card">
             <div className="list">
-              {savedDocsList.length === 0 ? (
+              {libraryList.length === 0 ? (
                 <div className="empty">
-                  Nothing saved yet. Generate a paper or lesson plan above and save it!
+                  Nothing saved in your library yet. Generate a paper or lesson plan above, or upload/import questions!
                 </div>
               ) : (
-                savedDocsList.map(d => (
-                  <div key={d.id} className="row">
+                libraryList.map(r => (
+                  <div key={r.id} className="row">
                     <div className="grow">
-                      <div className="title">
+                      <div className="title" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <a
                           href="#"
                           onClick={e => {
                             e.preventDefault();
-                            setViewingDoc(d);
+                            const docToView: SavedDoc = {
+                              id: r.id,
+                              title: r.title,
+                              type: (r.type === 'plan' || r.type === 'worksheet') ? r.type : 'exam',
+                              content: r.content,
+                              studentId: r.studentId || null,
+                              createdAt: r.createdAt,
+                            };
+                            setViewingDoc(docToView);
                           }}
                         >
-                          {d.title}
+                          {r.title}
                         </a>
+                        {r.subject && <span className="badge">{r.subject}</span>}
+                        <span className="badge ghost">{AI_TOOLS[r.type as keyof typeof AI_TOOLS] || r.type}</span>
+                        {r.studentId && <span className="badge outline">{studentName(r.studentId)}</span>}
                       </div>
                       <div className="meta">
-                        {AI_TOOLS[d.type as keyof typeof AI_TOOLS] || d.type} ·{' '}
-                        {fmtDate(d.createdAt.slice(0, 10))}
-                        {d.studentId ? ` · ${studentName(d.studentId)}` : ''}
+                        {[r.classLevel, r.topic, fmtDate(r.createdAt ? r.createdAt.split('T')[0] : '')]
+                          .filter(Boolean)
+                          .join(' • ')}
                       </div>
+                    </div>
+                    <div className="actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn icon ghost"
+                        onClick={() => toggleFavoriteAiResource(r.id)}
+                        title={r.isFavorite ? "Unfavorite" : "Favorite"}
+                      >
+                        {r.isFavorite ? '⭐' : '☆'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn sm outline"
+                        onClick={() => {
+                          const docToView: SavedDoc = {
+                            id: r.id,
+                            title: r.title,
+                            type: (r.type === 'plan' || r.type === 'worksheet') ? r.type : 'exam',
+                            content: r.content,
+                            studentId: r.studentId || null,
+                            createdAt: r.createdAt,
+                          };
+                          setViewingDoc(docToView);
+                        }}
+                      >
+                        View / Print
+                      </button>
+                      <button
+                        type="button"
+                        className="btn sm outline"
+                        onClick={() => handleLoadLibraryResource(r)}
+                      >
+                        Load in Editor
+                      </button>
+                      {r.type === 'exam' && (
+                        <button
+                          type="button"
+                          className="btn sm primary"
+                          onClick={() => {
+                            const docToExam: SavedDoc = {
+                              id: r.id,
+                              title: r.title,
+                              type: 'exam',
+                              content: r.content,
+                              studentId: r.studentId || null,
+                              createdAt: r.createdAt,
+                            };
+                            onStartExam(docToExam);
+                          }}
+                        >
+                          Start Exam
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn icon ghost"
+                        onClick={() => {
+                          deleteAiResource(r.id);
+                          deleteDoc(r.id);
+                          toast('Item deleted', 'info');
+                        }}
+                        style={{ color: 'var(--red-main)' }}
+                        title="Delete"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1268,6 +1363,7 @@ export const AIView: React.FC<AIViewProps> = ({
                   className="btn sm danger"
                   onClick={() => {
                     deleteDoc(viewingDoc.id);
+                    deleteAiResource(viewingDoc.id);
                     toast('Document deleted', 'info');
                     setViewingDoc(null);
                   }}

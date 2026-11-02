@@ -16,7 +16,7 @@ export function cycleLabel(c: { cycleType: string; cycleLength: number }): strin
 
 export function contractLessons(lessons: Lesson[], c: Contract, upTo?: string): Lesson[] {
   return lessons
-    .filter(l => l.contractId === c.id && l.status === 'taught' && l.date >= c.startDate && (!upTo || l.date <= upTo))
+    .filter(l => (l.contractId === c.id || (!l.contractId && l.studentId === c.studentId)) && l.status === 'taught' && l.date >= c.startDate && (!upTo || l.date <= upTo))
     .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
 }
 

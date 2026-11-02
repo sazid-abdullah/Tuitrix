@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { useStore } from '../store/context';
 import { uid } from '../utils/date';
+import { extractFileText } from '../services/ai';
 
 interface ImportDocModalProps {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface ImportDocModalProps {
 }
 
 export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose }) => {
-  const { state, saveDoc, toast } = useStore();
+  const { state, saveDoc, saveAiResource, toast } = useStore();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [type, setType] = useState<'exam' | 'worksheet' | 'plan'>('exam');
@@ -30,15 +31,32 @@ export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose 
 
     setLoading(true);
     try {
-      const content = await file.text();
+      const content = await extractFileText(file);
+      const docId = uid();
+      const docTitle = title || file.name.replace(/\.[^.]+$/, '');
+      const now = new Date().toISOString();
+
       saveDoc({
-        id: uid(),
+        id: docId,
         type,
-        title: title || file.name.replace(/\.[^.]+$/, ''),
+        title: docTitle,
         content,
         studentId: studentId || null,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       });
+
+      saveAiResource({
+        id: docId,
+        title: docTitle,
+        type,
+        classLevel: '',
+        subject: '',
+        topic: '',
+        content,
+        createdAt: now,
+        isFavorite: false,
+      });
+
       toast('Document imported to library', 'success');
       onClose();
     } catch (err: any) {

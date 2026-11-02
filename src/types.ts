@@ -144,6 +144,7 @@ export interface SavedAiResource {
   content: string;
   createdAt: string;    // ISO date
   isFavorite?: boolean;
+  studentId?: string | null;
 }
 
 export interface MCQQuestion {
@@ -216,6 +217,7 @@ export interface Attempt {
   flags?: string[];
   warned1?: boolean;
   warned5?: boolean;
+  scoreLogged?: boolean;
 }
 
 export interface AppSettings {

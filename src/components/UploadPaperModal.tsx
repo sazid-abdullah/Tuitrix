@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { useStore } from '../store/context';
-import { callAI, EXAM_JSON_SYSTEM, examJsonPrompt, normalizeExam } from '../services/ai';
+import { callAI, EXAM_JSON_SYSTEM, examJsonPrompt, normalizeExam, extractFileText, parseAiJson } from '../services/ai';
 import { uid } from '../utils/date';
 
 interface UploadPaperModalProps {
@@ -17,7 +17,7 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
   onClose,
   onExamReady,
 }) => {
-  const { state, saveDoc, saveExam, toast } = useStore();
+  const { state, saveDoc, saveAiResource, saveExam, toast } = useStore();
   const [studentId, setStudentId] = useState(initialStudentId || '');
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -67,7 +67,7 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
         const mime = isPdf ? 'application/pdf' : file.type || 'image/jpeg';
         filesData = [{ mimeType: mime, data: b64 }];
       } else {
-        textContent = await file.text();
+        textContent = await extractFileText(file);
       }
 
       const prompt = examJsonPrompt(textContent || file.name);
@@ -78,7 +78,7 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
         onFallback: (msg) => toast(msg, 'info'),
       });
 
-      const parsedJson = JSON.parse(res);
+      const parsedJson = parseAiJson(res);
       const normalized = normalizeExam(parsedJson);
 
       const examTitle = title.trim() || normalized.title || file.name.replace(/\.[^.]+$/, '');
@@ -93,6 +93,18 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
         content: textContent || `Exam paper generated from ${file.name}`,
         studentId: studentId || null,
         createdAt: now,
+      });
+
+      saveAiResource({
+        id: docId,
+        title: examTitle,
+        type: 'exam',
+        classLevel: '',
+        subject: '',
+        topic: '',
+        content: textContent || `Exam paper generated from ${file.name}`,
+        createdAt: now,
+        isFavorite: false,
       });
 
       saveExam({

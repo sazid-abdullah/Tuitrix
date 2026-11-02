@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/context';
-import { fmtDate, fmtN } from '../utils/date';
-import { renderMarkdown, callAI, MARK_SYSTEM, markPrompt } from '../services/ai';
+import { fmtDate, fmtN, uid, todayISO } from '../utils/date';
+import { renderMarkdown, callAI, MARK_SYSTEM, markPrompt, parseAiJson } from '../services/ai';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { Question } from '../types';
 
@@ -11,7 +11,7 @@ interface ResultViewProps {
 }
 
 export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate }) => {
-  const { state, studentName, saveAttempt, deleteAttempt, saveExam, toast } = useStore();
+  const { state, studentName, saveAttempt, deleteAttempt, saveExam, addExamScore, toast } = useStore();
   const attempt = state.attempts.find(a => a.id === attemptId);
   const exam = attempt ? state.exams.find(e => e.id === attempt.examId) : null;
 
@@ -21,6 +21,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
   );
   const [aiBusy, setAiBusy] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(attempt?.studentId || '');
 
   if (!attempt || !exam) {
     return (
@@ -39,8 +40,32 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
     );
   }
 
+  const activeStudentId = attempt.studentId || selectedStudentId;
+  const targetStudent = state.students.find(s => s.id === activeStudentId);
+
   const mcqs = exam.questions.filter(q => q.type === 'mcq');
   const wqs = exam.questions.filter(q => q.type !== 'mcq');
+
+  // Build lookup of maximum marks for CQ parts and written questions
+  const maxMarksMap: Record<string, number> = {};
+  for (const q of wqs) {
+    if (q.type === 'cq') {
+      q.parts.forEach((p, idx) => {
+        maxMarksMap[`${q.id}:${idx}`] = Number(p.marks) || 0;
+      });
+    } else {
+      maxMarksMap[`${q.id}:0`] = Number(q.marks) || 0;
+      maxMarksMap[q.id] = Number(q.marks) || 0;
+    }
+  }
+
+  // Clamps marks to valid bounds [0, max]
+  const clampMark = (val: any, max: number): number | '' => {
+    if (val === '' || val === null || val === undefined) return '';
+    const num = Number(val);
+    if (isNaN(num)) return 0;
+    return Math.max(0, Math.min(num, max));
+  };
 
   // Calculate scores
   let mcqGot = 0;
@@ -59,7 +84,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
       for (let i = 0; i < q.parts.length; i++) {
         const m = marksState[`${q.id}:${i}`];
         if (m !== undefined && m !== '') {
-          writtenGot += Number(m);
+          const clamped = clampMark(m, q.parts[i].marks);
+          writtenGot += typeof clamped === 'number' ? clamped : 0;
         } else {
           pendingCount++;
         }
@@ -67,7 +93,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
     } else {
       const m = marksState[q.id];
       if (m !== undefined && m !== '') {
-        writtenGot += Number(m);
+        const clamped = clampMark(m, q.marks);
+        writtenGot += typeof clamped === 'number' ? clamped : 0;
       } else {
         pendingCount++;
       }
@@ -82,6 +109,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
   }, 0);
 
   const totalScore = mcqGot + writtenGot;
+
+  const isScoreLogged = Boolean(
+    attempt.scoreLogged ||
+    (targetStudent && targetStudent.examScores?.some(s =>
+      s.id === attempt.id ||
+      s.remarks?.includes(`attempt:${attempt.id}`) ||
+      (s.title === attempt.title && s.totalMarks === totalMax && s.obtainedMarks === totalScore)
+    ))
+  );
 
   const handleAIMark = async () => {
     if (aiBusy) return;
@@ -124,11 +160,17 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
 
       const promptText = markPrompt(items);
       const res = await callAI(MARK_SYSTEM, promptText, state, { temperature: 0.2, json: true, onFallback: (msg) => toast(msg, 'info') });
-      const parsed = JSON.parse(res);
+      const parsed = parseAiJson(res);
 
       const out: Record<string, { marks: number; reason: string }> = {};
-      for (const m of parsed.marks || []) {
-        out[`${m.id}:${m.part}`] = { marks: Number(m.marks) || 0, reason: m.reason || '' };
+      for (const m of parsed?.marks || []) {
+        const key = `${m.id}:${m.part}`;
+        const maxVal = maxMarksMap[key] ?? maxMarksMap[m.id] ?? 100;
+        const clamped = clampMark(m.marks, maxVal);
+        out[key] = {
+          marks: typeof clamped === 'number' ? clamped : 0,
+          reason: m.reason || '',
+        };
       }
 
       setAiMarks(out);
@@ -144,7 +186,9 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
   const handleUseAIMarks = () => {
     const updated = { ...marksState };
     for (const [k, v] of Object.entries(aiMarks)) {
-      updated[k] = v.marks;
+      const maxVal = maxMarksMap[k] ?? 100;
+      const clamped = clampMark(v.marks, maxVal);
+      updated[k] = typeof clamped === 'number' ? clamped : 0;
     }
     setMarksState(updated);
     toast('Applied AI suggested marks', 'info');
@@ -152,14 +196,56 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
 
   const handleSaveMarks = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanMarks: Record<string, any> = {};
+    for (const [k, v] of Object.entries(marksState)) {
+      if (v === '' || v === undefined) {
+        cleanMarks[k] = '';
+      } else {
+        const maxVal = maxMarksMap[k] ?? 100;
+        cleanMarks[k] = clampMark(v, maxVal);
+      }
+    }
     const updated = {
       ...attempt,
       status: 'marked' as const,
+      marks: cleanMarks,
+      aiMarks,
+    };
+    saveAttempt(updated);
+    setMarksState(cleanMarks);
+    toast('Marks saved successfully', 'success');
+  };
+
+  const handleLogScore = () => {
+    if (!activeStudentId) {
+      toast('Please select a student to log score to their profile.', 'error');
+      return;
+    }
+    if (isScoreLogged) {
+      toast('Score has already been logged for this exam attempt.', 'info');
+      return;
+    }
+
+    addExamScore(activeStudentId, {
+      id: uid(),
+      studentId: activeStudentId,
+      title: attempt.title,
+      subject: exam.title,
+      date: todayISO(),
+      obtainedMarks: totalScore,
+      totalMarks: totalMax,
+      remarks: `Completed via Interactive Exam (attempt:${attempt.id})`,
+    });
+
+    const updated = {
+      ...attempt,
+      studentId: activeStudentId,
+      scoreLogged: true,
       marks: marksState,
       aiMarks,
     };
     saveAttempt(updated);
-    toast('Marks saved successfully', 'success');
+    toast('Score logged to student profile!', 'success');
   };
 
   const handleSetMCQAnswer = (qId: string, correctIdx: number) => {
@@ -181,12 +267,38 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
         <div>
           <h1>{attempt.title}</h1>
           <div className="sub">
-            {attempt.studentId ? `${studentName(attempt.studentId)} · ` : ''}
+            {activeStudentId ? `${studentName(activeStudentId)} · ` : ''}
             {fmtDate(new Date(attempt.startedAt).toISOString().slice(0, 10))}
           </div>
         </div>
-        <div className="actions">
-          <button className="btn ghost" onClick={() => setDeleteConfirmOpen(true)}>
+        <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {!attempt.studentId && (
+            <select
+              value={selectedStudentId}
+              onChange={e => setSelectedStudentId(e.target.value)}
+              style={{ minWidth: '150px' }}
+            >
+              <option value="">Select student…</option>
+              {state.students.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            className={`btn ${isScoreLogged ? 'secondary' : 'primary'}`}
+            onClick={handleLogScore}
+            disabled={!activeStudentId || isScoreLogged}
+            title={isScoreLogged ? 'Score already logged to student profile' : 'Log score to student profile'}
+          >
+            {isScoreLogged ? '✓ Score Logged to Profile' : '📈 Log Score to Student Profile'}
+          </button>
+          <button type="button" className="btn ghost" onClick={() => window.print()}>
+            🖨️ Print
+          </button>
+          <button type="button" className="btn ghost" onClick={() => setDeleteConfirmOpen(true)}>
             Delete result
           </button>
         </div>
@@ -274,12 +386,13 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                               max={p.marks}
                               step="0.5"
                               value={marksState[key] ?? ''}
-                              onChange={e =>
+                              onChange={e => {
+                                const v = e.target.value;
                                 setMarksState({
                                   ...marksState,
-                                  [key]: e.target.value === '' ? '' : Number(e.target.value),
-                                })
-                              }
+                                  [key]: v === '' ? '' : clampMark(v, p.marks),
+                                });
+                              }}
                             />{' '}
                             / {p.marks}
                           </label>
@@ -318,12 +431,13 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                           max={q.marks}
                           step="0.5"
                           value={marksState[q.id] ?? ''}
-                          onChange={e =>
+                          onChange={e => {
+                            const v = e.target.value;
                             setMarksState({
                               ...marksState,
-                              [q.id]: e.target.value === '' ? '' : Number(e.target.value),
-                            })
-                          }
+                              [q.id]: v === '' ? '' : clampMark(v, q.marks),
+                            });
+                          }}
                         />{' '}
                         / {q.marks}
                       </label>

@@ -68,16 +68,15 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
     setTheme(newTheme);
     if (storeUpdateSettings) {
       storeUpdateSettings({ theme: newTheme });
+    }
+    localStorage.setItem('tuitrix_theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    if (newTheme === 'light') {
+      document.body.classList.add('light-theme');
+      document.body.classList.remove('dark-theme');
     } else {
-      localStorage.setItem('tuitrix_theme', newTheme);
-      document.documentElement.setAttribute('data-theme', newTheme);
-      if (newTheme === 'light') {
-        document.body.classList.add('light-theme');
-        document.body.classList.remove('dark-theme');
-      } else {
-        document.body.classList.add('dark-theme');
-        document.body.classList.remove('light-theme');
-      }
+      document.body.classList.add('dark-theme');
+      document.body.classList.remove('light-theme');
     }
   };
 
@@ -143,7 +142,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
           </div>
           <div className="landing-nav">
             <button className="lang-toggle" onClick={toggleTheme} title="Toggle Theme" style={{ padding: '6px' }}>
-              {theme === 'light' ? '🌙' : '☀️'}
+              {currentTheme === 'light' ? '🌙' : '☀️'}
             </button>
             <button className="lang-toggle" onClick={handleToggleLang}>
               {lang === 'EN' ? 'বাংলা' : 'English'}

@@ -242,7 +242,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
             <span>
               {syncStatus === 'synced' && (lang === 'BN' ? '☁️ সিঙ্কড' : '☁️ Synced')}
               {syncStatus === 'syncing' && (lang === 'BN' ? '🔄 সিঙ্ক হচ্ছে...' : '🔄 Syncing...')}
-              {syncStatus === 'offline' && (lang === 'BN' ? '⚡ অফলাইন (লোকাল)' : '⚡ Offline (Saved Locally)')}
+              {syncStatus === 'offline' && (lang === 'BN' ? '⚡ অফলাইন' : '⚡ Offline (Saved Locally)')}
               {syncStatus === 'local' && (lang === 'BN' ? '⚡ লোকালে সেভড' : '⚡ Saved Locally')}
               {syncStatus === 'error' && (lang === 'BN' ? '⚠️ সিঙ্ক ত্রুটি' : '⚠️ Sync Error')}
             </span>

@@ -676,7 +676,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const student = s.students.find(st => st.id === studentId);
       if (!student) return s;
       const currentScores = student.examScores || [];
-      const updatedScores = score.id
+      const exists = score.id ? currentScores.some(sc => sc.id === score.id) : false;
+      const updatedScores = exists
         ? currentScores.map(sc => sc.id === score.id ? finalScore : sc)
         : [...currentScores, finalScore];
 

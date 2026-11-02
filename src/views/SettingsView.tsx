@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/context';
 import { SectionGuidePopover } from '../components/SectionGuidePopover';
-import { AI_PROVIDERS, fetchModelList, callAI, autoModel, readModelCache } from '../services/ai';
+import { AI_PROVIDERS, fetchModelList, callAI, autoModel, readModelCache, getDefaultModel, sanitizeModelId } from '../services/ai';
 import { todayISO, fmtDate } from '../utils/date';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { auth, submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, fetchPricingConfig, updatePricingConfig } from '../services/firebase';
@@ -53,7 +53,7 @@ export const SettingsView: React.FC = () => {
   }, []);
   const [provider, setProvider] = useState(state.ai.provider);
   const [apiKey, setApiKey] = useState(state.ai.keys[provider] || '');
-  const [selectedModel, setSelectedModel] = useState(state.ai.models[provider] || '');
+  const [selectedModel, setSelectedModel] = useState(sanitizeModelId(state.ai.models[provider] || ''));
   const [includeKeysInBackup, setIncludeKeysInBackup] = useState(false);
   const [testingAI, setTestingAI] = useState(false);
   const [refreshingModels, setRefreshingModels] = useState(false);
@@ -194,7 +194,7 @@ export const SettingsView: React.FC = () => {
   const handleProviderChange = (newP: typeof provider) => {
     setProvider(newP);
     setApiKey(state.ai.keys[newP] || '');
-    setSelectedModel(state.ai.models[newP] || '');
+    setSelectedModel(sanitizeModelId(state.ai.models[newP] || ''));
     updateAI({ provider: newP });
   };
 
@@ -203,7 +203,7 @@ export const SettingsView: React.FC = () => {
     updateAI({
       provider,
       keys: { ...state.ai.keys, [provider]: apiKey.trim() },
-      models: { ...state.ai.models, [provider]: selectedModel.trim() },
+      models: { ...state.ai.models, [provider]: sanitizeModelId(selectedModel) },
     });
     toast('AI configuration saved', 'success');
   };
@@ -212,7 +212,7 @@ export const SettingsView: React.FC = () => {
     const updatedAI = {
       provider,
       keys: { ...state.ai.keys, [provider]: apiKey.trim() },
-      models: { ...state.ai.models, [provider]: selectedModel.trim() },
+      models: { ...state.ai.models, [provider]: sanitizeModelId(selectedModel) },
     };
     updateAI(updatedAI);
 
@@ -1016,9 +1016,9 @@ export const SettingsView: React.FC = () => {
               Model
               <select
                 value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
+                onChange={e => setSelectedModel(sanitizeModelId(e.target.value))}
               >
-                <option value="">Auto default ({autoModel(provider, state)})</option>
+                <option value="">Auto default ({getDefaultModel(provider)})</option>
                 {availableModels.map(m => (
                   <option key={m.id} value={m.id}>
                     {m.name || m.id}
