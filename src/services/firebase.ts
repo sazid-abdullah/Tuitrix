@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPasswor
 import { getAnalytics, Analytics } from "firebase/analytics";
 import { getFirestore, Firestore, doc, setDoc, updateDoc, collection, getDocs, getDoc, query, orderBy, writeBatch, deleteDoc } from "firebase/firestore";
 import { deleteUser } from "firebase/auth";
-import { TrxUpgradeRequest, PricingConfig } from '../types';
+import { TrxUpgradeRequest, PricingConfig, FaqItem } from '../types';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -182,30 +182,124 @@ export const reviewUpgradeRequest = async (requestId: string, targetUid: string,
 };
 
 
-const DEFAULT_PRICING: PricingConfig = {
+export const DEFAULT_FAQS: FaqItem[] = [
+  {
+    id: 'faq_cycle',
+    category: 'getting_started',
+    sortOrder: 1,
+    qEn: 'How does tuition cycle tracking work (12-class, monthly, or day-based)?',
+    aEn: 'Tuitrix automatically counts completed classes toward your configured cycle (e.g., 12 lessons or calendar month). When the cycle limit is reached, Tuitrix alerts you that tuition fee is due and highlights the student on your Today’s Tuition Radar.',
+    qBn: 'টিউশন সাইকেল ট্র্যাকিং (১২-ক্লাস, মাসিক বা দিনভিত্তিক) কীভাবে কাজ করে?',
+    aBn: 'টুইট্রিক্স স্বয়ংক্রিয়ভাবে আপনার নির্ধারিত সাইকেল অনুযায়ী ক্লাস গণনা করে (যেমন ১২ ক্লাস বা ক্যালেন্ডার মাস)। সাইকেল শেষ হলে বকেয়া ফি পরিশোধের অ্যালার্ট দেয় এবং টুডে’স রাডারে সতর্কবার্তা দেখায়।'
+  },
+  {
+    id: 'faq_batch',
+    category: 'getting_started',
+    sortOrder: 2,
+    qEn: 'How do I create a batch and log attendance for multiple students in 1 tap?',
+    aEn: 'Navigate to Classes > Batches, create your batch, and add students. When class finishes, click "Log Batch Class" to record attendance, topic covered, and homework for every student simultaneously.',
+    qBn: 'কীভাবে ব্যাচ তৈরি করে ১ ক্লিকে সবার উপস্থিতি ও ক্লাস রেকর্ড করব?',
+    aBn: 'ক্লাসেস > ব্যাচেস-এ গিয়ে ব্যাচ তৈরি করে শিক্ষার্থী যোগ করুন। ক্লাস শেষে "Log Batch Class"-এ ট্যাপ করে এক ক্লিকেই সব শিক্ষার্থীর হাজিরা, পড়ার বিষয় ও বাড়ির কাজ সংরক্ষণ করুন।'
+  },
+  {
+    id: 'faq_upgrade_trx',
+    category: 'billing',
+    sortOrder: 3,
+    qEn: 'How do I upgrade to Tuitrix Pro using bKash, Nagad, or Rocket TrxID?',
+    aEn: 'In Settings, choose Monthly or Yearly Pro, send the exact amount via "Send Money" to our verified personal account number, enter your Sender Phone and Transaction ID (TrxID), and tap Submit. Verification takes 15–30 minutes.',
+    qBn: 'বিকাশ, নগদ বা রকেট ট্রানজেকশন আইডি (TrxID) দিয়ে কীভাবে প্রো-তে আপগ্রেড করব?',
+    aBn: 'সেটিংসে গিয়ে মান্থলি বা ইয়ারলি প্ল্যান বেছে নিন। আমাদের বিকাশ/নগদ/রকেট নম্বরে "Send Money" করে প্রেরক নম্বর ও TrxID লিখে সাবমিট করুন। ১৫-৩০ মিনিটের মধ্যে স্বয়ংক্রিয় বা ম্যানুয়াল ভেরিফিকেশন সম্পন্ন হবে।'
+  },
+  {
+    id: 'faq_promo',
+    category: 'billing',
+    sortOrder: 4,
+    qEn: 'How do I apply a Promo Code or Scholarship Code during checkout?',
+    aEn: 'Under Settings > Upgrade, enter your promo code (e.g. WELCOME30) into the promo box and click "Apply". The discount is deducted instantly from your payable total before submitting.',
+    qBn: 'চেকআউটের সময় প্রোমো বা স্কলারশিপ কোড কীভাবে ব্যবহার করব?',
+    aBn: 'সেটিংস > আপগ্রেড সেকশনে প্রোমো বক্সে আপনার কোড (যেমন WELCOME30) লিখে "Apply" ক্লিক করুন। সাথে সাথে মোট বিল থেকে ডিসকাউন্ট বাদ যাবে।'
+  },
+  {
+    id: 'faq_ai_generate',
+    category: 'ai_exams',
+    sortOrder: 5,
+    qEn: 'How do I generate AI Lesson Plans, Exam Papers, and Worksheets or import .docx / PDF papers?',
+    aEn: 'Open the AI Studio, select your subject and grade level, then click "Generate Question Paper". You can also import existing Microsoft Word (.docx) or PDF papers using the "Import Paper" button to convert them into interactive tests.',
+    qBn: 'কীভাবে এআই দিয়ে লেকচার শিট ও প্রশ্নপত্র তৈরি করব বা .docx / PDF ফাইল ইমপোর্ট করব?',
+    aBn: 'এআই স্টুডিওতে বিষয় ও শ্রেণি নির্ধারণ করে "Generate Question Paper" চাপুন। অথবা "Import Paper" বোতাম দিয়ে আপনার তৈরি করা .docx বা PDF ফাইল আপলোড করে সরাসরি অনলাইন পরীক্ষায় রূপান্তর করুন।'
+  },
+  {
+    id: 'faq_ai_grading',
+    category: 'ai_exams',
+    sortOrder: 6,
+    qEn: 'How does automated AI grading and rubric scoring assign marks to student answers?',
+    aEn: 'During or after an interactive exam, our AI analyzes student answers against ideal answer keys and marking rubrics, giving partial marks, personalized written feedback, and automatically logging the score to the student’s progress chart.',
+    qBn: 'এআই স্বয়ংক্রিয়ভাবে শিক্ষার্থীদের উত্তরের নম্বর ও ফিডব্যাক কীভাবে দেয়?',
+    aBn: 'পরীক্ষা শেষে এআই শিক্ষার্থীর প্রতিটি লিখিত ও বহুনির্বাচনী উত্তর আদর্শ উত্তরপত্রের সাথে তুলনা করে সঠিকতা অনুযায়ী মার্কস, বিস্তারিত ফিডব্যাক দেয় এবং স্বয়ংক্রিয়ভাবে শিক্ষার্থীর প্রফাইলে সেভ করে।'
+  },
+  {
+    id: 'faq_cloud_sync',
+    category: 'sync',
+    sortOrder: 7,
+    qEn: 'How do Cloud Sync and Offline JSON Backups keep data safe across phone and PC?',
+    aEn: 'Tuitrix works 100% offline using IndexedDB/LocalStorage. When online and signed in, your data seamlessly synchronizes to Google Cloud. You can also download a JSON backup anytime from Settings > Backup.',
+    qBn: 'ক্লাউড সিঙ্ক এবং অফলাইন ব্যাকআপ কীভাবে মোবাইল ও পিসিতে ডাটা সুরক্ষিত রাখে?',
+    aBn: 'টুইট্রিক্স অফলাইন-ফার্স্ট প্রযুক্তিতে কাজ করে। ইন্টারনেট আসলে ও লগইন থাকলে ক্লাউডে অটোমেটিক ব্যাকআপ হয়। এছাড়া যেকোনো সময় সেটিংস থেকে অফলাইন JSON ব্যাকআপ ফাইল ডাউনলোড করে রাখতে পারেন।'
+  },
+  {
+    id: 'faq_print_brand',
+    category: 'account',
+    sortOrder: 8,
+    qEn: 'How do I customize branded print headers/watermarks for printed PDF sheets and receipts?',
+    aEn: 'In Settings > Tutor Profile, customize your Tutor Name, Academy Title, and Credentials, then enable "Show Print Header" and "Show Watermark". Every payment receipt and question paper printed or exported will feature your personal brand.',
+    qBn: 'প্রিন্ট করা শিট ও রসিদে নিজের ব্র্যান্ড হেডার ও ওয়াটারমার্ক কীভাবে যুক্ত করব?',
+    aBn: 'সেটিংস > টিউটর প্রোফাইল থেকে আপনার নাম, প্রতিষ্ঠানের নাম ও শিক্ষাগত যোগ্যতা লিখুন এবং "Show Print Header" ও "Show Watermark" চালু করুন। প্রতিটি প্রশ্নপত্র ও রসিদে আপনার নিজস্ব ব্র্যান্ডিং দৃশ্যমান হবে।'
+  }
+];
+
+export const DEFAULT_PRICING: PricingConfig = {
   monthlyPriceBdt: 99,
   yearlyPriceBdt: 999,
+  freeStudentLimit: 5,
   promoCodes: [
-    { code: 'WELCOME30', discountPercent: 30, active: true, description: 'Welcome 30% off' },
-    { code: 'TUITRIX50', discountPercent: 50, active: true, description: 'Tuitrix 50% off' }
+    { code: 'WELCOME30', discountPercent: 30, discountType: 'percent', discountValue: 30, active: true, description: 'Welcome 30% off' },
+    { code: 'TUITRIX50', discountPercent: 50, discountType: 'percent', discountValue: 50, active: true, description: 'Tuitrix 50% off' }
   ],
   bkashNumber: '017XXXXXXX',
   nagadNumber: '017XXXXXXX',
   rocketNumber: '017XXXXXXX',
+  supportWhatsapp: '017XXXXXXX',
+  supportEmail: 'abdullahsazid109@gmail.com',
   promoText: '',
+  faqs: DEFAULT_FAQS,
   updatedAt: Date.now()
 };
 
 export const fetchPricingConfig = async (): Promise<PricingConfig> => {
   if (!db) {
     const local = localStorage.getItem('tuitrix_pricing');
-    return local ? JSON.parse(local) : DEFAULT_PRICING;
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        return {
+          ...DEFAULT_PRICING,
+          ...parsed,
+          faqs: (parsed.faqs && parsed.faqs.length > 0) ? parsed.faqs : DEFAULT_FAQS
+        };
+      } catch {}
+    }
+    return DEFAULT_PRICING;
   }
   try {
     const docRef = doc(db, 'app_config', 'pricing');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data() as PricingConfig;
+      const data = docSnap.data() as PricingConfig;
+      return {
+        ...DEFAULT_PRICING,
+        ...data,
+        faqs: (data.faqs && data.faqs.length > 0) ? data.faqs : DEFAULT_FAQS
+      };
     }
   } catch (e) {
     console.error("Failed to fetch pricing config", e);

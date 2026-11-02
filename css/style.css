@@ -1885,3 +1885,385 @@ button.plan-opt { font: inherit; color: inherit; text-align: left; cursor: point
   text-decoration: line-through;
   color: var(--muted);
 }
+
+/* ── Help Centre & Bilingual FAQ ──────────────────────── */
+.help-center-container {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+
+.help-center-hero {
+  padding: 28px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.help-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.help-lang-badge {
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.help-hero-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: var(--text);
+}
+
+.help-hero-subtitle {
+  font-size: 0.95rem;
+  max-width: 620px;
+  margin: 0 auto 20px auto;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.help-search-box {
+  position: relative;
+  max-width: 580px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.help-search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.help-search-input {
+  width: 100%;
+  padding: 12px 40px 12px 42px;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--bg-input, var(--surface));
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.help-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.help-clear-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 50%;
+}
+
+.help-clear-btn:hover {
+  color: var(--text);
+  background: var(--card2);
+}
+
+.faq-pills-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.faq-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.faq-pill {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.faq-pill:hover {
+  border-color: var(--accent);
+  background: var(--card2);
+}
+
+.faq-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.faq-pill-count {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.faq-pill:not(.active) .faq-pill-count {
+  background: var(--card2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.help-quick-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.help-quick-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.help-card-icon {
+  font-size: 1.8rem;
+}
+
+.help-quick-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.help-quick-card p {
+  margin: 0;
+  flex: 1;
+  line-height: 1.5;
+}
+
+.faq-accordion-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.faq-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.faq-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.faq-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.faq-card.expanded {
+  border-color: var(--accent);
+}
+
+.faq-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  gap: 12px;
+  color: var(--text);
+}
+
+.faq-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.faq-q-badge {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  max-width: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.faq-question-text {
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.faq-chevron {
+  transition: transform 0.25s ease;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.faq-chevron.rotate {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.faq-answer {
+  padding: 0 20px 18px 52px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--muted);
+  animation: fadeInFaq 0.2s ease;
+}
+
+.faq-answer p {
+  margin: 0;
+  color: var(--text);
+  opacity: 0.9;
+}
+
+@keyframes fadeInFaq {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.help-contact-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card2);
+}
+
+.help-contact-info {
+  max-width: 520px;
+}
+
+.help-response-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--green);
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.help-contact-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Owner Dashboard Tabs & FAQ Manager ──────────────── */
+.owner-dashboard-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.owner-tab-btn {
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.owner-tab-btn:hover {
+  color: var(--text);
+  background: var(--card2);
+}
+
+.owner-tab-btn.active {
+  color: var(--accent);
+  background: var(--card);
+  border-color: var(--border);
+}
+
+.faq-manager-table th,
+.faq-manager-table td {
+  vertical-align: middle;
+}
+
+/* ── Mobile responsiveness for Help Centre ───────────── */
+@media (max-width: 900px) {
+  .help-center-hero {
+    padding: 20px 14px;
+  }
+  .help-hero-title {
+    font-size: 1.4rem;
+  }
+  .faq-header {
+    padding: 14px 16px;
+  }
+  .faq-answer {
+    padding: 0 16px 14px 44px;
+  }
+  .help-contact-banner {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .help-contact-actions {
+    justify-content: center;
+  }
+}

@@ -5,7 +5,8 @@ import { LandingView } from '../views/LandingView';
 import * as firebaseServices from '../services/firebase';
 
 vi.mock('../services/firebase', () => ({
-  fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 150, yearlyPriceBdt: 1500, bkashNumber: '', nagadNumber: '', rocketNumber: '', promoCodes: [], promoText: '', updatedAt: 0 }))
+  fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 150, yearlyPriceBdt: 1500, bkashNumber: '', nagadNumber: '', rocketNumber: '', promoCodes: [], promoText: '', updatedAt: 0 })),
+  DEFAULT_FAQS: []
 }));
 
 describe('LandingView', () => {

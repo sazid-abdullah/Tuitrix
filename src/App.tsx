@@ -28,6 +28,8 @@ import { ExamView } from './views/ExamView';
 import { ResultView } from './views/ResultView';
 import { SettingsView } from './views/SettingsView';
 import { LandingView } from './views/LandingView';
+import { HelpCenterView } from './views/HelpCenterView';
+import { OwnerDashboardView } from './views/OwnerDashboardView';
 
 import { Student, Contract, Lesson, Payment, Expense, Goal, SavedDoc } from './types';
 import { fmtClock, uid } from './utils/date';
@@ -46,7 +48,7 @@ export const App: React.FC = () => {
     const [path, queryString] = h.split('?');
     const parts = path.split('/').filter(Boolean);
     const r = parts[0] || 'home';
-    const validRoutes = ['home', 'students', 'student', 'classes', 'money', 'ai', 'exam', 'result', 'settings', 'landing'];
+    const validRoutes = ['home', 'students', 'student', 'classes', 'money', 'ai', 'exam', 'result', 'settings', 'landing', 'help', 'owner'];
     let matchedRoute = validRoutes.includes(r) ? r : 'home';
     const param = parts[1] || (queryString ? `?${queryString}` : '');
     if (matchedRoute === 'home' && r !== 'home') {
@@ -145,12 +147,14 @@ export const App: React.FC = () => {
     const query = new URLSearchParams(window.location.search);
     const isLandingQuery = query.get('landing') === '1' || window.location.hash.includes('?landing=1');
     const legalQuery = query.get('legal');
+    const hashRoute = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+    const isExplicitDeepLink = Boolean(hashRoute && hashRoute !== 'home' && hashRoute !== 'landing');
 
     if (legalQuery && ['privacy', 'terms', 'billing', 'security'].includes(legalQuery)) {
       setLegalTab(legalQuery as any);
     }
 
-    if (isLandingQuery || (!isAuthenticated && isFirstTime)) {
+    if (isLandingQuery || (!isAuthenticated && isFirstTime && !isExplicitDeepLink)) {
       setShowLanding(true);
     }
   }, [isAuthenticated]);
@@ -453,6 +457,14 @@ export const App: React.FC = () => {
             }}
             embedded={true}
           />
+        )}
+
+        {route === 'help' && (
+          <HelpCenterView onNavigate={navigate} />
+        )}
+
+        {route === 'owner' && (
+          <OwnerDashboardView onNavigate={navigate} />
         )}
       </main>
 

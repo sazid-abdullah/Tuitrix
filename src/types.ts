@@ -298,20 +298,60 @@ export interface AppState {
 
 export interface PromoCode {
   code: string;
-  discountPercent: number;
+  discountType?: 'percent' | 'flat'; // defaults to 'percent'
+  discountValue?: number;            // if undefined, falls back to discountPercent
+  discountPercent: number;           // kept synced for backward compatibility
+  maxUses?: number;                  // 0 or undefined = unlimited
+  usedCount?: number;                // tracks how many people used this code
+  expiresAt?: string;                // optional YYYY-MM-DD
   active: boolean;
   description?: string;
+}
+
+export interface FaqItem {
+  id: string;
+  category: 'getting_started' | 'billing' | 'ai_exams' | 'sync' | 'account';
+  qEn: string;
+  aEn: string;
+  qBn: string;
+  aBn: string;
+  sortOrder?: number;
 }
 
 export interface PricingConfig {
   monthlyPriceBdt: number;
   yearlyPriceBdt: number;
+  freeStudentLimit?: number;
   promoCodes: PromoCode[];
   bkashNumber: string;
   nagadNumber: string;
   rocketNumber: string;
+  supportWhatsapp?: string;
+  supportEmail?: string;
   promoText: string;
+  faqs?: FaqItem[];
   updatedAt: number;
+}
+
+export interface PlatformTelemetry {
+  totalUsers: number;
+  proUsers: number;
+  freeUsers: number;
+  pendingCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  totalRevenueBdt: number;
+  totalPromoRedemptions: number;
+  promoUsageMap: Record<string, { count: number; totalDiscountBdt: number; revenueGeneratedBdt: number }>;
+  allRequests: TrxUpgradeRequest[];
+  registeredTutors: Array<{
+    uid: string;
+    email: string;
+    tutorName: string;
+    plan: 'free' | 'pro';
+    studentCount: number;
+    updatedAt: number;
+  }>;
 }
 
 export interface ToastMessage {

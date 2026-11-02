@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PricingConfig } from '../types';
-import { fetchPricingConfig } from '../services/firebase';
+import { fetchPricingConfig, DEFAULT_FAQS } from '../services/firebase';
 import { ApkShareModal } from '../components/ApkShareModal';
 import { useStore } from '../store/context';
 import { isProUser } from '../utils/tierLimits';
@@ -379,14 +379,24 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
 
       {/* FAQ & Footer */}
       <section className="faq-section">
-        <h2>FAQ</h2>
-        <div className="faq-item">
-          <h4>How does the 12-class cycle tracking work?</h4>
-          <p>Tuitrix automatically increments the class count each time you log a lesson and alerts you when payment is due.</p>
+        <h2>{lang === 'BN' ? 'সাধারণ জিজ্ঞাসা (FAQ)' : 'Frequently Asked Questions'}</h2>
+        <div className="faq-list">
+          {((pricingConfig?.faqs && pricingConfig.faqs.length > 0) ? pricingConfig.faqs : (DEFAULT_FAQS || [])).slice(0, 6).map((faq) => (
+            <div key={faq.id} className="faq-item">
+              <h4>{lang === 'BN' ? faq.qBn : faq.qEn}</h4>
+              <p>{lang === 'BN' ? faq.aBn : faq.aEn}</p>
+            </div>
+          ))}
         </div>
-        <div className="faq-item">
-          <h4>How do I upgrade via bKash/Nagad?</h4>
-          <p>Simply send money to the listed number in Settings and submit your TrxID. Instant activation!</p>
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => { window.location.hash = '#/help'; }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+          >
+            {lang === 'BN' ? 'সম্পূর্ণ সহায়তা কেন্দ্র ও প্রশ্নোত্তর দেখুন →' : 'View Full Help Centre & FAQ →'}
+          </button>
         </div>
       </section>
 

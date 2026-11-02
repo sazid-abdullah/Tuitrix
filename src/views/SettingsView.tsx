@@ -382,6 +382,14 @@ export const SettingsView: React.FC = () => {
           <div className="sub">Tutor profile, AI engines, data backup & publishing setup</div>
         </div>
         <div className="actions">
+          {isOwner && (
+            <a href="#/owner" className="btn primary" style={{ textDecoration: 'none', textAlign: 'center', marginRight: '6px' }}>
+              👑 Owner Dashboard
+            </a>
+          )}
+          <a href="#/help" className="btn outline" style={{ textDecoration: 'none', textAlign: 'center', marginRight: '6px' }}>
+            ❓ Help & FAQ
+          </a>
           <a href="#/landing" className="btn outline">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style={{marginRight: '8px'}}>
               <path d="M12 2L2 12h3v8h6v-6h2v6h6v-8h3L12 2z"/>
@@ -1159,14 +1167,21 @@ export const SettingsView: React.FC = () => {
             Need help configuring your batch, resolving billing issues, or reporting a bug? We are here to assist.
           </p>
           <div className="actions">
-            <a href={`mailto:abdullahsazid109@gmail.com?subject=Tuitrix Support Request&body=App Version: 1.0.0%0D%0APlan: ${isPro ? "Pro" : "Free"}%0D%0ADevice: ${navigator.userAgent}`} className="btn primary" style={{ textDecoration: 'none', textAlign: 'center' }}>
-              📧 Email Support / Report Issue
-            </a>
-            <button className="btn" onClick={() => {
-              alert("Billing & Upgrade Help:\n\nIf you paid via bKash/Nagad and submitted your TrxID but are not seeing Pro features, please wait 15-30 minutes for manual verification.\n\nFor immediate assistance, please use the Email Support option.");
-            }}>
-              💬 Billing & Upgrade Help
+            <button className="btn primary" onClick={() => { window.location.hash = '#/help'; }}>
+              📚 Open Help Centre & FAQ
             </button>
+            <a
+              href={`https://wa.me/88${(pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '').replace(/\D/g, '')}?text=${encodeURIComponent('Hello Tuitrix Support, I need assistance.')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn outline"
+              style={{ textDecoration: 'none', textAlign: 'center' }}
+            >
+              💬 WhatsApp Support
+            </a>
+            <a href={`mailto:${pricingConfig?.supportEmail || 'abdullahsazid109@gmail.com'}?subject=Tuitrix Support Request&body=App Version: 1.0.0%0D%0APlan: ${isPro ? "Pro" : "Free"}%0D%0ADevice: ${navigator.userAgent}`} className="btn outline" style={{ textDecoration: 'none', textAlign: 'center' }}>
+              📧 Email Support
+            </a>
           </div>
         </div>
 
