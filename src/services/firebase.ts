@@ -1,9 +1,9 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, Auth } from 'firebase/auth';
 import { getAnalytics, Analytics } from "firebase/analytics";
-import { getFirestore, Firestore, doc, setDoc, updateDoc, collection, getDocs, getDoc, query, orderBy, writeBatch, deleteDoc } from "firebase/firestore";
+import { initializeFirestore, getFirestore, Firestore, doc, setDoc, updateDoc, collection, getDocs, getDoc, query, orderBy, writeBatch, deleteDoc } from "firebase/firestore";
 import { deleteUser } from "firebase/auth";
-import { TrxUpgradeRequest, PricingConfig, FaqItem } from '../types';
+import { TrxUpgradeRequest, PricingConfig, FaqItem, PromoCode, EvaluatedPromoResult, PlatformTelemetry } from '../types';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -24,13 +24,107 @@ let googleProvider: GoogleAuthProvider | undefined;
 
 try {
   app = initializeApp(firebaseConfig);
-  analytics = getAnalytics(app);
-  db = getFirestore(app);
+  try {
+    if (typeof initializeFirestore === 'function') {
+      db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+    } else {
+      db = getFirestore(app);
+    }
+  } catch {
+    db = getFirestore(app);
+  }
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
 } catch (e) {
-  console.warn("Failed to initialize Firebase:", e);
+  console.warn("Failed to initialize Firebase core services:", e);
 }
+
+if (app) {
+  try {
+    analytics = getAnalytics(app);
+  } catch (e) {
+    console.warn("Firebase Analytics could not be initialized (e.g. ad-blocker or unsupported environment):", e);
+  }
+}
+
+export const evaluatePromoCode = (
+  promo: PromoCode | null | undefined,
+  basePrice: number
+): EvaluatedPromoResult => {
+  if (!promo || !promo.code) {
+    return {
+      valid: false,
+      error: 'Invalid or missing promo code',
+      discountAmount: 0,
+      finalPrice: basePrice,
+      discountPercent: 0,
+      code: '',
+    };
+  }
+
+  const cleanCode = promo.code.trim().toUpperCase();
+
+  if (!promo.active) {
+    return {
+      valid: false,
+      error: `Promo code "${cleanCode}" is no longer active`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+      discountPercent: 0,
+      code: cleanCode,
+    };
+  }
+
+  // Check max usage cap
+  if (promo.maxUses !== undefined && promo.maxUses > 0 && (promo.usedCount || 0) >= promo.maxUses) {
+    return {
+      valid: false,
+      error: `Promo code "${cleanCode}" usage limit reached (${promo.maxUses} uses max)`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+      discountPercent: 0,
+      code: cleanCode,
+    };
+  }
+
+  // Check expiry date (YYYY-MM-DD)
+  if (promo.expiresAt) {
+    const today = new Date().toISOString().split('T')[0];
+    if (promo.expiresAt < today) {
+      return {
+        valid: false,
+        error: `Promo code "${cleanCode}" expired on ${promo.expiresAt}`,
+        discountAmount: 0,
+        finalPrice: basePrice,
+        discountPercent: 0,
+        code: cleanCode,
+      };
+    }
+  }
+
+  const discountType = promo.discountType || 'percent';
+  const val = promo.discountValue !== undefined ? promo.discountValue : promo.discountPercent;
+  let discountAmount = 0;
+
+  if (discountType === 'flat') {
+    discountAmount = Math.max(0, Math.round(val));
+  } else {
+    const pct = Math.min(100, Math.max(0, val));
+    discountAmount = Math.round(basePrice * (pct / 100));
+  }
+
+  discountAmount = Math.min(basePrice, discountAmount);
+  const finalPrice = Math.max(0, basePrice - discountAmount);
+  const computedPercent = basePrice > 0 ? Math.round((discountAmount / basePrice) * 100) : 0;
+
+  return {
+    valid: true,
+    discountAmount,
+    finalPrice,
+    discountPercent: computedPercent,
+    code: cleanCode,
+  };
+};
 
 export const submitTrxUpgradeRequest = async (uid: string, email: string, name: string | undefined, payload: { method: 'bkash' | 'nagad' | 'rocket'; senderPhone: string; trxId: string; amount: number; planTerm?: 'monthly' | 'yearly'; billingCycle?: 'monthly' | 'yearly'; promoCodeUsed?: string; discountAmountBdt?: number; finalAmountBdt: number }) => {
   const reqId = `req_${Date.now()}`;
@@ -67,6 +161,51 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
     finalAmountBdt: payload.finalAmountBdt,
     status: 'pending' as const,
   };
+
+  // Increment usedCount for the applied promo code in localStorage and Firestore
+  if (payload.promoCodeUsed) {
+    const codeToIncrement = payload.promoCodeUsed.trim().toUpperCase();
+    const localPricingStr = localStorage.getItem('tuitrix_pricing');
+    if (localPricingStr) {
+      try {
+        const localPricing: PricingConfig = JSON.parse(localPricingStr);
+        let changed = false;
+        localPricing.promoCodes = (localPricing.promoCodes || []).map(p => {
+          if (p.code.toUpperCase() === codeToIncrement) {
+            changed = true;
+            return { ...p, usedCount: (p.usedCount || 0) + 1 };
+          }
+          return p;
+        });
+        if (changed) {
+          localStorage.setItem('tuitrix_pricing', JSON.stringify(localPricing));
+        }
+      } catch {}
+    }
+
+    if (db) {
+      try {
+        const pricingRef = doc(db, 'app_config', 'pricing');
+        const pricingSnap = await getDoc(pricingRef);
+        if (pricingSnap.exists()) {
+          const pricingData = pricingSnap.data() as PricingConfig;
+          let changed = false;
+          const updatedPromos = (pricingData.promoCodes || []).map(p => {
+            if (p.code.toUpperCase() === codeToIncrement) {
+              changed = true;
+              return { ...p, usedCount: (p.usedCount || 0) + 1 };
+            }
+            return p;
+          });
+          if (changed) {
+            await updateDoc(pricingRef, { promoCodes: updatedPromos, updatedAt: Date.now() });
+          }
+        }
+      } catch (e) {
+        console.warn("Could not increment promo usedCount in Firestore:", e);
+      }
+    }
+  }
 
   if (!db) {
     // Local fallback for offline/demo mode
@@ -109,7 +248,8 @@ export const fetchPendingUpgradeRequests = async (): Promise<TrxUpgradeRequest[]
 
   if (!auth?.currentUser) return [];
 
-  if (auth.currentUser.email !== 'abdullahsazid109@gmail.com') {
+  const currentEmail = auth.currentUser.email?.trim().toLowerCase();
+  if (currentEmail !== 'abdullahsazid109@gmail.com') {
     return [];
   }
 
@@ -118,6 +258,118 @@ export const fetchPendingUpgradeRequests = async (): Promise<TrxUpgradeRequest[]
   return snapshot.docs
     .map(doc => doc.data() as TrxUpgradeRequest)
     .filter(req => req.status === 'pending');
+};
+
+export const fetchAllUpgradeRequests = async (): Promise<TrxUpgradeRequest[]> => {
+  if (!db) {
+    const reqs: TrxUpgradeRequest[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('upgrade_req_')) {
+        reqs.push(JSON.parse(localStorage.getItem(key)!));
+      }
+    }
+    return reqs;
+  }
+
+  if (!auth?.currentUser) return [];
+
+  const currentEmail = auth.currentUser.email?.trim().toLowerCase();
+  if (currentEmail !== 'abdullahsazid109@gmail.com') {
+    return [];
+  }
+
+  const q = query(collection(db, 'upgrade_requests'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => doc.data() as TrxUpgradeRequest);
+};
+
+export const fetchPlatformTelemetry = async (pricingConfig?: PricingConfig): Promise<PlatformTelemetry> => {
+  const allRequests = await fetchAllUpgradeRequests();
+  const pricing = pricingConfig || await fetchPricingConfig();
+
+  const pendingCount = allRequests.filter(r => r.status === 'pending').length;
+  const approvedCount = allRequests.filter(r => r.status === 'approved').length;
+  const rejectedCount = allRequests.filter(r => r.status === 'rejected').length;
+
+  const totalRevenueBdt = allRequests
+    .filter(r => r.status === 'approved')
+    .reduce((sum, r) => sum + (r.finalAmountBdt !== undefined ? r.finalAmountBdt : r.amount), 0);
+
+  // Per-promo usage stats
+  const promoUsageMap: Record<string, { count: number; totalDiscountBdt: number; revenueGeneratedBdt: number }> = {};
+
+  (pricing.promoCodes || []).forEach(p => {
+    promoUsageMap[p.code.toUpperCase()] = {
+      count: p.usedCount || 0,
+      totalDiscountBdt: 0,
+      revenueGeneratedBdt: 0,
+    };
+  });
+
+  let totalPromoRedemptions = 0;
+  allRequests.forEach(req => {
+    if (req.promoCodeUsed) {
+      const code = req.promoCodeUsed.trim().toUpperCase();
+      totalPromoRedemptions++;
+      if (!promoUsageMap[code]) {
+        promoUsageMap[code] = { count: 0, totalDiscountBdt: 0, revenueGeneratedBdt: 0 };
+      }
+      const configPromo = (pricing.promoCodes || []).find(p => p.code.toUpperCase() === code);
+      promoUsageMap[code].count = Math.max(promoUsageMap[code].count, configPromo?.usedCount || 0);
+      const discount = req.discountAmountBdt !== undefined ? req.discountAmountBdt : Math.max(0, req.amount - (req.finalAmountBdt || req.amount));
+      promoUsageMap[code].totalDiscountBdt += discount;
+      promoUsageMap[code].revenueGeneratedBdt += (req.finalAmountBdt !== undefined ? req.finalAmountBdt : req.amount);
+    }
+  });
+
+  const uniqueUsers = new Set<string>();
+  const proUserIds = new Set<string>();
+  const registeredTutors: PlatformTelemetry['registeredTutors'] = [];
+
+  allRequests.forEach(req => {
+    uniqueUsers.add(req.uid);
+    if (req.status === 'approved') {
+      proUserIds.add(req.uid);
+    }
+  });
+
+  if (db && auth?.currentUser?.email?.trim().toLowerCase() === 'abdullahsazid109@gmail.com') {
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.docs.forEach(docSnap => {
+        const uid = docSnap.id;
+        uniqueUsers.add(uid);
+        const data = docSnap.data();
+        registeredTutors.push({
+          uid,
+          email: data?.email || 'Tutor',
+          tutorName: data?.name || data?.tutorName || 'Tutor',
+          plan: proUserIds.has(uid) ? 'pro' : 'free',
+          studentCount: data?.studentCount || 0,
+          updatedAt: data?.updatedAt || Date.now(),
+        });
+      });
+    } catch {}
+  }
+
+  const totalUsers = Math.max(uniqueUsers.size, registeredTutors.length, 1);
+  const proUsers = proUserIds.size;
+  const freeUsers = Math.max(0, totalUsers - proUsers);
+
+  return {
+    totalUsers,
+    proUsers,
+    freeUsers,
+    pendingCount,
+    approvedCount,
+    rejectedCount,
+    totalRevenueBdt,
+    totalPromoRedemptions,
+    promoUsageMap,
+    allRequests,
+    registeredTutors,
+  };
 };
 
 export const reviewUpgradeRequest = async (requestId: string, targetUid: string, action: 'approved' | 'rejected', planTerm?: 'monthly' | 'yearly', amount: number = 99) => {

@@ -4,7 +4,7 @@ import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { AI_PROVIDERS, fetchModelList, callAI, autoModel, readModelCache, getDefaultModel, sanitizeModelId } from '../services/ai';
 import { todayISO, fmtDate } from '../utils/date';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { auth, submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, fetchPricingConfig, updatePricingConfig } from '../services/firebase';
+import { auth, onAuthStateChanged, submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, fetchPricingConfig, updatePricingConfig, evaluatePromoCode } from '../services/firebase';
 import { isOwnerEmail } from '../utils/auth';
 import { TrxUpgradeRequest, PricingConfig } from '../types';
 import { requestNotificationPermission, sendLocalReminderNotification, getDueRemindersSummary } from '../services/notifications';
@@ -63,6 +63,7 @@ export const SettingsView: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
   const [modelsLoadedMsg, setModelsLoadedMsg] = useState('');
   const apiKeyTimeout = useRef<number | null>(null);
+  const isFirstMount = useRef(true);
 
   const [upgradeMethod, setUpgradeMethod] = useState<'bkash' | 'nagad' | 'rocket'>('bkash');
   const [senderPhone, setSenderPhone] = useState('');
@@ -74,7 +75,15 @@ export const SettingsView: React.FC = () => {
 
 
   const [adminRequests, setAdminRequests] = useState<TrxUpgradeRequest[]>([]);
-  const isOwner = auth?.currentUser?.email ? isOwnerEmail(auth.currentUser.email) : false;
+  const [currentAuthUser, setCurrentAuthUser] = useState<any>(auth?.currentUser || null);
+
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, u => setCurrentAuthUser(u));
+  }, []);
+
+  const currentEmail = user?.email || auth?.currentUser?.email || currentAuthUser?.email;
+  const isOwner = isOwnerEmail(currentEmail) || Boolean((state as any).isOwner) || localStorage.getItem('tuitrix_mock_owner') === 'true';
 
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
   const [pricingForm, setPricingForm] = useState<PricingConfig>({
@@ -109,14 +118,7 @@ export const SettingsView: React.FC = () => {
     setModelsLoadedMsg('');
   }, [provider]);
 
-  useEffect(() => {
-    if (apiKeyTimeout.current) window.clearTimeout(apiKeyTimeout.current);
-    if (!apiKey.trim()) return;
-    apiKeyTimeout.current = window.setTimeout(() => {
-      handleRefreshModels(false);
-    }, 1000);
-    return () => { if (apiKeyTimeout.current) window.clearTimeout(apiKeyTimeout.current); };
-  }, [apiKey]);
+
 
   useEffect(() => {
     if (isOwner) {
@@ -267,6 +269,21 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (apiKeyTimeout.current) window.clearTimeout(apiKeyTimeout.current);
+    if (!apiKey.trim()) return;
+    apiKeyTimeout.current = window.setTimeout(() => {
+      handleRefreshModels(false);
+    }, 1000);
+    return () => {
+      if (apiKeyTimeout.current) window.clearTimeout(apiKeyTimeout.current);
+    };
+  }, [apiKey]);
+
   const handleBackupDownload = () => {
     const content = exportBackup(includeKeysInBackup);
     downloadFile(`tuitrix-backup-${todayISO()}.json`, content, 'application/json');
@@ -315,8 +332,12 @@ export const SettingsView: React.FC = () => {
       let finalAmount = baseAmount;
       let discountAmount = 0;
       if (appliedPromo) {
-        discountAmount = Math.round(baseAmount * (appliedPromo.discountPercent / 100));
-        finalAmount = Math.max(0, baseAmount - discountAmount);
+        const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === appliedPromo.code.toUpperCase());
+        const evalRes = evaluatePromoCode(found, baseAmount);
+        if (evalRes.valid) {
+          discountAmount = evalRes.discountAmount;
+          finalAmount = evalRes.finalPrice;
+        }
       }
 
       await submitTrxUpgradeRequest(
@@ -342,24 +363,37 @@ export const SettingsView: React.FC = () => {
     setIsSubmittingUpgrade(false);
   };
 
+  const getSubtotal = () => planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
+
+  const getDiscount = () => {
+    if (!appliedPromo) return 0;
+    const base = getSubtotal();
+    const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === appliedPromo.code.toUpperCase());
+    const res = evaluatePromoCode(found, base);
+    return res.valid ? res.discountAmount : 0;
+  };
+
+  const getTotal = () => Math.max(0, getSubtotal() - getDiscount());
+
   const handleApplyPromo = () => {
     setPromoError('');
     if (!promoInput.trim()) return;
     const code = promoInput.trim().toUpperCase();
-    const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === code && p.active);
-    if (found) {
-      setAppliedPromo({ code: found.code, discountPercent: found.discountPercent });
+    const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === code);
+    const subtotal = getSubtotal();
+    const result = evaluatePromoCode(found, subtotal);
+    if (result.valid) {
+      setAppliedPromo({
+        code: result.code,
+        discountPercent: result.discountPercent,
+      });
       setPromoError('');
-      toast('Promo code applied!', 'success');
+      toast(`Promo code applied: ${found?.discountType === 'flat' ? `৳${result.discountAmount} off` : `${result.discountPercent}% off`}!`, 'success');
     } else {
       setAppliedPromo(null);
-      setPromoError('Invalid or expired promo code');
+      setPromoError(result.error || 'Invalid or expired promo code');
     }
   };
-
-  const getSubtotal = () => planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
-  const getDiscount = () => appliedPromo ? Math.round(getSubtotal() * (appliedPromo.discountPercent / 100)) : 0;
-  const getTotal = () => Math.max(0, getSubtotal() - getDiscount());
 
   const handleReviewRequest = async (id: string, uid: string, action: 'approved' | 'rejected', planTerm?: 'monthly' | 'yearly', amount?: number) => {
     try {
@@ -401,217 +435,37 @@ export const SettingsView: React.FC = () => {
 
 
       <div className="grid">
-        {/* Admin Dashboard */}
+        {/* Owner Control Centre Summary Card */}
         {isOwner && (
-          <div className="card" style={{ gridColumn: '1 / -1', border: '2px solid var(--accent)' }}>
-            <h2 style={{ color: 'var(--accent)' }}>👑 Owner Admin — TrxID Approvals</h2>
-            {adminRequests.length === 0 ? (
-              <p className="muted small">No pending upgrade requests.</p>
-            ) : (
-              <table className="table" style={{ marginTop: '8px', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Details</th>
-                    <th>Promo / Amount</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {adminRequests.map(req => (
-                    <tr key={req.id}>
-                      <td>
-                        <div style={{ fontWeight: 'bold' }}>{req.userEmail}</div>
-                        <div className="small muted">{fmtDate(req.createdAt.split('T')[0])}</div>
-                        <div className="small muted">Plan: {req.billingCycle || req.planTerm}</div>
-                      </td>
-                      <td>
-                        <div><strong>M:</strong> {req.method.toUpperCase()}</div>
-                        <div><strong>TrxID:</strong> <code style={{background:'var(--bg)', padding:'2px 4px', borderRadius:'4px'}}>{req.trxId}</code></div>
-                        <div><strong>Phone:</strong> {req.senderPhone}</div>
-                      </td>
-                      <td>
-                        {req.promoCodeUsed ? (
-                          <div>
-                            <div style={{ color: 'var(--green)', fontWeight: 'bold', fontSize: '0.8rem' }}>Promo: {req.promoCodeUsed}</div>
-                            <div style={{ textDecoration: 'line-through', color: 'var(--muted)', fontSize: '0.8rem' }}>৳{req.amount}</div>
-                            <div style={{ fontWeight: 'bold' }}>Total: ৳{req.finalAmountBdt}</div>
-                          </div>
-                        ) : (
-                          <div style={{ fontWeight: 'bold' }}>৳{req.finalAmountBdt || req.amount}</div>
-                        )}
-                      </td>
-                      <td>
-                        <button className="btn primary small" onClick={() => handleReviewRequest(req.id, req.uid, 'approved', req.planTerm, req.finalAmountBdt || req.amount)} style={{ marginRight: '4px', marginBottom: '4px' }}>Approve</button>
-                        <button className="btn danger small" onClick={() => handleReviewRequest(req.id, req.uid, 'rejected')}>Reject</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-
-        {isOwner && (
-          <div className="card" style={{ gridColumn: '1 / -1', border: '2px solid var(--accent)' }}>
-            <h2 style={{ color: 'var(--accent)' }}>👑 Owner Admin — Pricing & Payment Numbers</h2>
-            <form className="form" onSubmit={handleSavePricing} style={{ marginTop: '12px' }}>
-              <div className="form-row">
-                <label className="field">
-                  Monthly Price (৳)
-                  <input type="number" value={pricingForm.monthlyPriceBdt} onChange={e => setPricingForm({ ...pricingForm, monthlyPriceBdt: Number(e.target.value) })} required />
-                </label>
-                <label className="field">
-                  Yearly Price (৳)
-                  <input type="number" value={pricingForm.yearlyPriceBdt} onChange={e => setPricingForm({ ...pricingForm, yearlyPriceBdt: Number(e.target.value) })} required />
-                </label>
-              </div>
-
-              <div style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                <h4>Promo Codes</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                  {pricingForm.promoCodes?.map((promo, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input
-                        value={promo.code}
-                        onChange={e => {
-                          const newPromos = [...(pricingForm.promoCodes || [])];
-                          newPromos[idx].code = e.target.value.toUpperCase();
-                          setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                        }}
-                        placeholder="CODE"
-                        style={{ flex: 1 }}
-                      />
-                      <input
-                        type="number"
-                        value={promo.discountPercent}
-                        onChange={e => {
-                          const newPromos = [...(pricingForm.promoCodes || [])];
-                          newPromos[idx].discountPercent = Number(e.target.value);
-                          setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                        }}
-                        placeholder="%"
-                        style={{ width: '80px' }}
-                      />
-                      <label className="check" style={{ margin: 0 }}>
-                        <input
-                          type="checkbox"
-                          checked={promo.active}
-                          onChange={e => {
-                            const newPromos = [...(pricingForm.promoCodes || [])];
-                            newPromos[idx].active = e.target.checked;
-                            setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                          }}
-                        />
-                        Active
-                      </label>
-                      <button type="button" className="btn danger small" onClick={() => {
-                        const newPromos = [...(pricingForm.promoCodes || [])];
-                        newPromos.splice(idx, 1);
-                        setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                      }}>X</button>
-                    </div>
-                  ))}
-                  <button type="button" className="btn outline small" onClick={() => {
-                    const newPromos = [...(pricingForm.promoCodes || [])];
-                    newPromos.push({ code: '', discountPercent: 10, active: true });
-                    setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                  }}>+ Add Promo Code</button>
+          <div className="card owner-summary-card" style={{ gridColumn: '1 / -1', border: '2px solid var(--accent)', background: 'var(--card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h2 style={{ color: 'var(--accent)', margin: 0 }}>👑 Owner Control Centre</h2>
+                  <span className="badge green">Master Access</span>
                 </div>
-              </div>
-              <div className="form-row">
-                <label className="field">
-                  bKash Number
-                  <input value={pricingForm.bkashNumber} onChange={e => setPricingForm({ ...pricingForm, bkashNumber: e.target.value })} required />
-                </label>
-                <label className="field">
-                  Nagad Number
-                  <input value={pricingForm.nagadNumber} onChange={e => setPricingForm({ ...pricingForm, nagadNumber: e.target.value })} required />
-                </label>
-                <label className="field">
-                  Rocket Number
-                  <input value={pricingForm.rocketNumber} onChange={e => setPricingForm({ ...pricingForm, rocketNumber: e.target.value })} required />
-                </label>
-              </div>
-              <label className="field" style={{ marginTop: '8px' }}>
-                Promo Text (optional, displayed above payment)
-                <input value={pricingForm.promoText} onChange={e => setPricingForm({ ...pricingForm, promoText: e.target.value })} placeholder="e.g. 50% OFF for the first 100 users!" />
-              </label>
-              <button type="submit" className="btn primary" style={{ marginTop: '12px' }}>Save Pricing Config</button>
-            </form>
-          </div>
-        )}
-
-        {isOwner && (
-          <div className="card" style={{ gridColumn: '1 / -1', border: '2px solid var(--accent)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ color: 'var(--accent)', margin: 0 }}>🎟️ Owner Admin — Promo & Scholarship Code Studio</h2>
-              <button className="btn outline small" onClick={() => {
-                setTimeout(() => {
-                  const el = document.getElementById('upgrade-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }, 100);
-              }}>
-                👁️ Preview User Checkout UI
-              </button>
-            </div>
-
-            <div style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                {pricingForm.promoCodes?.map((promo, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input
-                      value={promo.code}
-                      onChange={e => {
-                        const newPromos = [...(pricingForm.promoCodes || [])];
-                        newPromos[idx].code = e.target.value.toUpperCase();
-                        setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                      }}
-                      placeholder="CODE"
-                      style={{ flex: 1 }}
-                    />
-                    <input
-                      type="number"
-                      value={promo.discountPercent}
-                      onChange={e => {
-                        const newPromos = [...(pricingForm.promoCodes || [])];
-                        newPromos[idx].discountPercent = Number(e.target.value);
-                        setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                      }}
-                      placeholder="%"
-                      style={{ width: '80px' }}
-                    />
-                    <label className="check" style={{ margin: 0 }}>
-                      <input
-                        type="checkbox"
-                        checked={promo.active}
-                        onChange={e => {
-                          const newPromos = [...(pricingForm.promoCodes || [])];
-                          newPromos[idx].active = e.target.checked;
-                          setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                        }}
-                      />
-                      Active
-                    </label>
-                    <button type="button" className="btn outline small" onClick={() => {
-                      const newPromos = [...(pricingForm.promoCodes || [])];
-                      newPromos.splice(idx, 1);
-                      setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                    }} title="Delete Promo Code">🗑️</button>
+                <p className="muted small" style={{ margin: '6px 0 0 0' }}>
+                  Manage live pricing, payment numbers, promo & scholarship codes, TrxID approvals, and platform telemetry.
+                </p>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ padding: '6px 12px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <span className="muted small">Pending TrxIDs: </span>
+                    <strong style={{ color: adminRequests.length > 0 ? 'var(--yellow)' : 'var(--green)' }}>{adminRequests.length}</strong>
                   </div>
-                ))}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-                  <button type="button" className="btn primary outline small" onClick={() => {
-                    const newPromos = [...(pricingForm.promoCodes || [])];
-                    newPromos.push({ code: '', discountPercent: 10, active: true });
-                    setPricingForm({ ...pricingForm, promoCodes: newPromos });
-                  }}>+ Add Promo Code</button>
-
-                  <button className="btn primary" onClick={handleSavePricing}>Save Promo Codes</button>
+                  <div style={{ padding: '6px 12px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <span className="muted small">Active Promos: </span>
+                    <strong>{pricingConfig?.promoCodes?.filter(p => p.active).length || 0}</strong>
+                  </div>
+                  <div style={{ padding: '6px 12px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <span className="muted small">Pro Price: </span>
+                    <strong>৳{pricingConfig?.monthlyPriceBdt || 99} / mo</strong>
+                  </div>
                 </div>
+              </div>
+              <div>
+                <a href="#/owner" className="btn primary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', fontWeight: 600 }}>
+                  👑 Open Owner Dashboard →
+                </a>
               </div>
             </div>
           </div>
@@ -624,7 +478,7 @@ export const SettingsView: React.FC = () => {
             <div>
               <p>Current Plan: <strong>{isPro ? 'Pro Tier' : 'Free Tier'}</strong></p>
               {isPro && billingState?.proUntil && (
-                <p>Pro Until: {fmtDate(new Date(billingState.proUntil).toISOString())}</p>
+                <p>Pro Until: {fmtDate(billingState.proUntil)}</p>
               )}
               {!isPro && (!billingState || billingState.plan === 'free') && (
                 <p>AI Credits: <strong>{billingState?.credits || 0}</strong></p>
@@ -799,18 +653,23 @@ export const SettingsView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {billingState.transactions.map((t: any) => (
-                        <tr key={t.id}>
-                          <td>{fmtDate(new Date(t.created_at).toISOString())}</td>
-                          <td>{t.plan}</td>
-                          <td>{state.settings.currency}{t.amount}</td>
-                          <td>
-                            <span className={`badge ${t.status === 'paid' ? 'green' : t.status === 'pending' ? 'yellow' : 'red'}`}>
-                              {t.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {billingState.transactions.map((t: any, idx: number) => {
+                        const rawDate = t.date || t.created_at || t.createdAt;
+                        const d = rawDate ? new Date(rawDate) : null;
+                        const safeIso = d && !isNaN(d.getTime()) ? d.toISOString() : todayISO();
+                        return (
+                          <tr key={t.id || idx}>
+                            <td>{fmtDate(safeIso)}</td>
+                            <td>{t.plan || t.planTerm || 'Pro'}</td>
+                            <td>{state.settings.currency}{t.amount}</td>
+                            <td>
+                              <span className={`badge ${t.status === 'pending' ? 'yellow' : t.status === 'rejected' ? 'red' : 'green'}`}>
+                                {t.status || 'approved'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

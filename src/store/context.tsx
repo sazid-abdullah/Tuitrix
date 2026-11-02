@@ -170,6 +170,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let unsubscribe: () => void = () => {};
     if (auth) { unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user ? { email: user.email } : null);
+      if (unsubscribeBilling) unsubscribeBilling();
+      setBillingState(null);
       if (user) {
         const isOwner = isOwnerEmail(user.email);
         setSyncStatus(navigator.onLine ? 'syncing' : 'offline');
@@ -337,46 +339,60 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []); // state shouldn't be here since we upload dataToUpload
 
-  // Persist state changes
+  // Persist state changes (debounced by 250ms)
+  const debounceTimerRef = useRef<any>(null);
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
-
-      if (isInitialRemoteLoadRef.current) {
-        isInitialRemoteLoadRef.current = false;
-        return;
-      }
-
-      if (!navigator.onLine) {
-        setSyncStatus('offline');
-        return;
-      }
-
-      // Write to firestore if logged in and not currently migrating
-      const user = auth?.currentUser;
-      if (user && authLoadedRef.current && !isMigratingRef.current) {
-        if (db) {
-          setSyncStatus('syncing');
-          const docRef = doc(db, `users/${user.uid}/data/appState`);
-          setDoc(docRef, state)
-            .then(() => {
-              setSyncStatus('synced');
-              setLastSyncedAt(new Date().toISOString());
-            })
-            .catch(e => {
-              console.error('Failed to save to Firestore', e);
-              setSyncStatus(!navigator.onLine ? 'offline' : 'error');
-            });
-        }
-      } else if (!user) {
-        setSyncStatus('local');
-      }
-    } catch (e) {
-      console.error('Failed to save state', e);
-      if (navigator.onLine && auth?.currentUser) {
-        setSyncStatus('error');
-      }
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
+
+    debounceTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify(state));
+
+        if (isInitialRemoteLoadRef.current) {
+          isInitialRemoteLoadRef.current = false;
+          return;
+        }
+
+        if (!navigator.onLine) {
+          setSyncStatus('offline');
+          return;
+        }
+
+        // Write to firestore if logged in and not currently migrating
+        const user = auth?.currentUser;
+        if (user && authLoadedRef.current && !isMigratingRef.current) {
+          if (db) {
+            setSyncStatus('syncing');
+            const docRef = doc(db, `users/${user.uid}/data/appState`);
+            setDoc(docRef, state)
+              .then(() => {
+                setSyncStatus('synced');
+                setLastSyncedAt(new Date().toISOString());
+              })
+              .catch(e => {
+                console.error('Failed to save to Firestore', e);
+                setSyncStatus(!navigator.onLine ? 'offline' : 'error');
+              });
+          }
+        } else if (!user) {
+          setSyncStatus('local');
+        }
+      } catch (e) {
+        console.error('Failed to save state', e);
+        if (navigator.onLine && auth?.currentUser) {
+          setSyncStatus('error');
+        }
+      }
+    }, 250);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [state]);
 
   // Sync across tabs

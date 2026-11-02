@@ -11,8 +11,18 @@ export function todayISO(): string {
 }
 
 export function parseISO(s: string): Date {
-  const [y, m, d] = String(s).split('-').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
+  if (!s) return new Date();
+  try {
+    const str = String(s).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      const [y, m, d] = str.split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1);
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? new Date() : d;
+  } catch {
+    return new Date();
+  }
 }
 
 export function addDays(iso: string, n: number): string {
@@ -41,9 +51,30 @@ export function monthKey(iso: string): string {
 
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export function fmtDate(iso: string, opts?: Intl.DateTimeFormatOptions): string {
+export function fmtDate(iso?: any, opts?: Intl.DateTimeFormatOptions): string {
   if (!iso) return '';
-  return parseISO(iso).toLocaleDateString(undefined, opts || { day: 'numeric', month: 'short', year: 'numeric' });
+  try {
+    let d: Date;
+    if (iso instanceof Date) {
+      d = iso;
+    } else if (typeof iso === 'number') {
+      d = new Date(iso);
+    } else if (typeof iso === 'string') {
+      const s = iso.trim();
+      if (!s) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        d = parseISO(s);
+      } else {
+        d = new Date(s);
+      }
+    } else {
+      return '';
+    }
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, opts || { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 export function fmtMonth(key: string): string {

@@ -308,6 +308,15 @@ export interface PromoCode {
   description?: string;
 }
 
+export interface EvaluatedPromoResult {
+  valid: boolean;
+  error?: string;
+  discountAmount: number;
+  finalPrice: number;
+  discountPercent: number;
+  code: string;
+}
+
 export interface FaqItem {
   id: string;
   category: 'getting_started' | 'billing' | 'ai_exams' | 'sync' | 'account';

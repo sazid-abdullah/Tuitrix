@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy, Component, ErrorInfo, ReactNode } from 'react';
 import { useStore } from './store/context';
 import { Navbar } from './components/Navbar';
 import { LegalModal } from './components/LegalModal';
@@ -20,16 +20,74 @@ import { auth } from './services/firebase';
 
 import { HomeView } from './views/HomeView';
 import { StudentsView } from './views/StudentsView';
-import { StudentDetailView } from './views/StudentDetailView';
 import { ClassesView } from './views/ClassesView';
-import { MoneyView } from './views/MoneyView';
-import { AIView } from './views/AIView';
-import { ExamView } from './views/ExamView';
-import { ResultView } from './views/ResultView';
 import { SettingsView } from './views/SettingsView';
-import { LandingView } from './views/LandingView';
-import { HelpCenterView } from './views/HelpCenterView';
-import { OwnerDashboardView } from './views/OwnerDashboardView';
+
+// Route-based code splitting for heavy views
+const StudentDetailView = lazy(() => import('./views/StudentDetailView').then(m => ({ default: m.StudentDetailView })));
+const MoneyView = lazy(() => import('./views/MoneyView').then(m => ({ default: m.MoneyView })));
+const AIView = lazy(() => import('./views/AIView').then(m => ({ default: m.AIView })));
+const ExamView = lazy(() => import('./views/ExamView').then(m => ({ default: m.ExamView })));
+const ResultView = lazy(() => import('./views/ResultView').then(m => ({ default: m.ResultView })));
+const LandingView = lazy(() => import('./views/LandingView').then(m => ({ default: m.LandingView })));
+const HelpCenterView = lazy(() => import('./views/HelpCenterView').then(m => ({ default: m.HelpCenterView })));
+const OwnerDashboardView = lazy(() => import('./views/OwnerDashboardView').then(m => ({ default: m.OwnerDashboardView })));
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  onReset?: () => void;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('View Error Boundary caught error:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="card" style={{ maxWidth: '600px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>⚠️</div>
+          <h2>Something went wrong in this view</h2>
+          <p className="muted small" style={{ margin: '12px 0 24px 0' }}>
+            {this.state.error?.message || 'An unexpected rendering error occurred.'}
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button
+              className="btn primary"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                if (this.props.onReset) this.props.onReset();
+                else window.location.reload();
+              }}
+            >
+              🔄 Reload View
+            </button>
+            <button
+              className="btn outline"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.hash = '#/home';
+              }}
+            >
+              🏠 Go Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import { Student, Contract, Lesson, Payment, Expense, Goal, SavedDoc } from './types';
 import { fmtClock, uid } from './utils/date';
@@ -213,37 +271,31 @@ export const App: React.FC = () => {
   if (showLanding) {
     return (
       <>
-        <LandingView
-          onEnterApp={handleEnterApp}
-          onSignIn={() => {
-            handleEnterApp();
-            setAuthModalOpen(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <LandingView
+            onEnterApp={handleEnterApp}
+            onSignIn={() => {
+              handleEnterApp();
+              setAuthModalOpen(true);
+            }}
+          />
+        </Suspense>
         <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
         <LegalModal isOpen={!!legalTab} initialTab={legalTab || 'privacy'} onClose={() => setLegalTab(null)} />
       </>
     );
   }
 
-  if (requiresOnboarding) {
-    return (
-      <>
-        <Navbar currentRoute={route} onNavigate={navigate} onLoginClick={() => setAuthModalOpen(true)} />
-        <main id="view" tabIndex={-1}></main>
-        <OnboardingModal isOpen={true} />
-        <ToastContainer />
-        <LegalModal isOpen={!!legalTab} initialTab={legalTab || 'privacy'} onClose={() => setLegalTab(null)} />
-      </>
-    );
-  }
+
 
   return (
     <>
       <Navbar currentRoute={route} onNavigate={navigate} onLoginClick={() => setAuthModalOpen(true)} />
 
       <main id="view" tabIndex={-1}>
-        {runningExam && route !== 'exam' && (
+        <ErrorBoundary onReset={() => window.location.reload()}>
+          <Suspense fallback={<div className="card" style={{ margin: '40px auto', padding: '32px', textAlign: 'center', color: 'var(--muted)' }}><span className="sync-dot" style={{ display: 'inline-block', marginRight: '8px' }}></span>Loading view...</div>}>
+            {runningExam && route !== 'exam' && (
           <div className="notice warn" style={{ marginBottom: '16px' }}>
             An exam is currently in progress: <b>{runningExam.title}</b> (
             {fmtClock(runningExam.endsAt - Date.now())} remaining).{' '}
@@ -466,9 +518,14 @@ export const App: React.FC = () => {
         {route === 'owner' && (
           <OwnerDashboardView onNavigate={navigate} />
         )}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       {/* Global Modals */}
+      <OnboardingModal
+        isOpen={requiresOnboarding && !['settings', 'owner', 'help', 'landing'].includes(route)}
+      />
       <StudentModal
         isOpen={studentModalOpen}
         student={selectedStudent}

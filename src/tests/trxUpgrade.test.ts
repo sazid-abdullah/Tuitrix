@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as firebaseMod from '../services/firebase';
-import { submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest } from '../services/firebase';
+import { submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, evaluatePromoCode, fetchPlatformTelemetry } from '../services/firebase';
+import { PromoCode } from '../types';
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => null),
@@ -100,5 +101,126 @@ describe('trxUpgrade functionality', () => {
 
     const pendingReqs = await fetchPendingUpgradeRequests();
     expect(pendingReqs.find(r => r.id === req.id)).toBeUndefined();
+  });
+
+  describe('evaluatePromoCode', () => {
+    it('evaluates percentage discount correctly', () => {
+      const promo: PromoCode = {
+        code: 'SAVE30',
+        discountType: 'percent',
+        discountValue: 30,
+        discountPercent: 30,
+        active: true,
+      };
+
+      const res = evaluatePromoCode(promo, 100);
+      expect(res.valid).toBe(true);
+      expect(res.discountAmount).toBe(30);
+      expect(res.finalPrice).toBe(70);
+      expect(res.discountPercent).toBe(30);
+    });
+
+    it('evaluates flat discount correctly and clamps to basePrice', () => {
+      const promo: PromoCode = {
+        code: 'FLAT50',
+        discountType: 'flat',
+        discountValue: 50,
+        discountPercent: 50,
+        active: true,
+      };
+
+      const res = evaluatePromoCode(promo, 99);
+      expect(res.valid).toBe(true);
+      expect(res.discountAmount).toBe(50);
+      expect(res.finalPrice).toBe(49);
+
+      // Clamps when flat discount > basePrice
+      const resCapped = evaluatePromoCode(promo, 30);
+      expect(resCapped.valid).toBe(true);
+      expect(resCapped.discountAmount).toBe(30);
+      expect(resCapped.finalPrice).toBe(0);
+    });
+
+    it('rejects inactive promo code', () => {
+      const promo: PromoCode = {
+        code: 'INACTIVE',
+        discountType: 'percent',
+        discountValue: 20,
+        discountPercent: 20,
+        active: false,
+      };
+
+      const res = evaluatePromoCode(promo, 99);
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain('no longer active');
+    });
+
+    it('rejects promo code that has exceeded maxUses', () => {
+      const promo: PromoCode = {
+        code: 'LIMITED',
+        discountType: 'percent',
+        discountValue: 20,
+        discountPercent: 20,
+        maxUses: 5,
+        usedCount: 5,
+        active: true,
+      };
+
+      const res = evaluatePromoCode(promo, 99);
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain('usage limit reached');
+    });
+
+    it('rejects expired promo code', () => {
+      const promo: PromoCode = {
+        code: 'EXPIRED',
+        discountType: 'percent',
+        discountValue: 20,
+        discountPercent: 20,
+        expiresAt: '2020-01-01',
+        active: true,
+      };
+
+      const res = evaluatePromoCode(promo, 99);
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain('expired');
+    });
+  });
+
+  describe('submitTrxUpgradeRequest promo tracking & fetchPlatformTelemetry', () => {
+    it('increments promo usedCount on submit and reflects in telemetry', async () => {
+      const initialPricing = {
+        monthlyPriceBdt: 99,
+        yearlyPriceBdt: 999,
+        promoCodes: [
+          { code: 'PROMO10', discountType: 'percent' as const, discountValue: 10, discountPercent: 10, usedCount: 0, active: true },
+        ],
+        bkashNumber: '01711111111',
+        nagadNumber: '01722222222',
+        rocketNumber: '01733333333',
+        promoText: '',
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem('tuitrix_pricing', JSON.stringify(initialPricing));
+
+      await submitTrxUpgradeRequest('promo-user', 'promouser@test.com', 'Promo User', {
+        method: 'bkash',
+        senderPhone: '01700000000',
+        trxId: 'TRXPROMO1',
+        amount: 99,
+        promoCodeUsed: 'PROMO10',
+        discountAmountBdt: 10,
+        finalAmountBdt: 89,
+      });
+
+      const updatedPricing = JSON.parse(localStorage.getItem('tuitrix_pricing')!);
+      const promoItem = updatedPricing.promoCodes.find((p: any) => p.code === 'PROMO10');
+      expect(promoItem.usedCount).toBe(1);
+
+      const telem = await fetchPlatformTelemetry(updatedPricing);
+      expect(telem.pendingCount).toBeGreaterThanOrEqual(1);
+      expect(telem.promoUsageMap['PROMO10']).toBeDefined();
+      expect(telem.promoUsageMap['PROMO10'].count).toBe(1);
+    });
   });
 });

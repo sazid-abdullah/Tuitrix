@@ -3,6 +3,7 @@ import { auth, signOut, onAuthStateChanged } from '../services/firebase';
 import { User } from 'firebase/auth';
 import { useStore } from '../store/context';
 import { isProUser } from '../utils/tierLimits';
+import { isOwnerEmail } from '../utils/auth';
 
 interface NavbarProps {
   currentRoute: string;
@@ -159,6 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
   const username = user?.displayName || (user?.email ? user.email.split('@')[0] : 'User');
   const userInitial = (user?.displayName?.[0] || user?.email?.[0] || 'U').toUpperCase();
   const isPro = user ? isProUser(billingState, user.email) : false;
+  const isOwner = isOwnerEmail(user?.email || auth?.currentUser?.email) || Boolean((state as any).isOwner) || localStorage.getItem('tuitrix_mock_owner') === 'true';
 
   return (
     <>
@@ -285,6 +287,24 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
 
         {/* Right Zone: Utilities + Compact Account Pill */}
         <div className="header-right nav-zone-right">
+          {/* Owner Dashboard Quick Access */}
+          {isOwner && (
+            <button
+              onClick={() => onNavigate('owner')}
+              className={`util-btn owner-badge-btn ${currentRoute === 'owner' ? 'active' : ''}`}
+              title="👑 Owner Master Dashboard"
+              id="nav-btn-owner"
+              style={{
+                fontWeight: 600,
+                color: 'var(--accent)',
+                borderColor: currentRoute === 'owner' ? 'var(--accent)' : 'var(--border)',
+                background: currentRoute === 'owner' ? 'var(--card)' : 'transparent',
+              }}
+            >
+              👑 Owner
+            </button>
+          )}
+
           {/* Language Toggle */}
           <button
             onClick={toggleLanguage}
@@ -391,6 +411,22 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
             </a>
           );
         })}
+        {isOwner && (
+          <a
+            href="#/owner"
+            onClick={e => {
+              e.preventDefault();
+              onNavigate('owner');
+            }}
+            className={currentRoute === 'owner' ? 'active' : ''}
+            data-route="owner"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" />
+            </svg>
+            <span>Owner</span>
+          </a>
+        )}
       </nav>
     </>
   );
