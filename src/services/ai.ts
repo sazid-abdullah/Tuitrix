@@ -509,8 +509,20 @@ export function examMarks(f: any): number {
 }
 
 export function examPrompt(f: any): string {
+  const fmt = f.format || 'custom';
   const marks = examMarks(f);
-  const types = (f.types && f.types.length ? f.types : ['Multiple choice', 'Short answer']).join(', ');
+
+  let types: string;
+  if (fmt === 'board') {
+    types = `${f.mcqCount || 25} Multiple Choice Questions (1 mark each) and ${f.cqCount || 8} Creative Questions (সৃজনশীল / CQ with stimulus and a, b, c, d parts totaling 10 marks each, student answers any ${f.cqAnswer || 5})`;
+  } else if (fmt === 'cq') {
+    types = `${f.cqCount || 8} Creative Questions (student answers any ${f.cqAnswer || 5}, 10 marks each)`;
+  } else if (fmt === 'mcq') {
+    types = `${f.mcqCount || 25} Multiple Choice Questions (1 mark each)`;
+  } else {
+    types = (f.types && f.types.length ? f.types : ['Multiple choice', 'Short answer']).join(', ');
+  }
+
   return `Create an exam paper.
 
 - Grade/Class: ${f.grade || 'not specified'}

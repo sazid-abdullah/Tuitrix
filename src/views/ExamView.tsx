@@ -6,6 +6,15 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { Modal } from '../components/Modal';
 import { Question, MCQQuestion, CQQuestion, WrittenQuestion } from '../types';
 
+export const isQuestionAnswered = (q: Question, ansMap: Record<string, any>): boolean => {
+  if (q.type === 'mcq') return ansMap[q.id] !== undefined && ansMap[q.id] !== null;
+  if (q.type === 'cq') {
+    const parts = ansMap[q.id];
+    return Boolean(parts && typeof parts === 'object' && Object.values(parts).some((v: any) => String(v || '').trim().length > 0));
+  }
+  return Boolean(ansMap[q.id] && String(ansMap[q.id]).trim().length > 0);
+};
+
 interface ExamViewProps {
   attemptId: string;
   onNavigate: (route: string, param?: string) => void;
@@ -132,14 +141,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
 
   // Compute question answering stats
   const totalQuestions = exam.questions.length;
-  const answeredCount = exam.questions.filter(q => {
-    if (q.type === 'mcq') return answers[q.id] !== undefined;
-    if (q.type === 'cq') {
-      const parts = answers[q.id];
-      return parts && Object.values(parts).some((v: any) => String(v).trim().length > 0);
-    }
-    return answers[q.id] && String(answers[q.id]).trim().length > 0;
-  }).length;
+  const answeredCount = exam.questions.filter(q => isQuestionAnswered(q, answers)).length;
 
   const L = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)'];
 
@@ -305,10 +307,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
       >
         <div className="exam-qgrid">
           {exam.questions.map((q, idx) => {
-            const isAnswered =
-              q.type === 'mcq'
-                ? answers[q.id] !== undefined
-                : answers[q.id] && String(answers[q.id]).trim().length > 0;
+            const isAnswered = isQuestionAnswered(q, answers);
             const isFlagged = flags.includes(q.id);
 
             return (

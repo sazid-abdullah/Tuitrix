@@ -403,6 +403,7 @@ export const App: React.FC = () => {
         {route === 'classes' && (
           <ClassesView
             initialStudentFilter={routeParam.startsWith('student=') ? routeParam.split('=')[1] : ''}
+            initialBatchFilter={routeParam.startsWith('batch=') ? routeParam.split('=')[1] : ''}
             onNavigate={navigate}
             onLogLesson={opts => {
               setSelectedLesson(opts.lesson || null);

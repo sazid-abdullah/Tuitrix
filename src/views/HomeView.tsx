@@ -367,7 +367,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {radarStudents.map(s => {
-              const slot = s.schedule?.find(sl => Number(sl.day) === dow);
+              const individualSlot = s.schedule?.find(sl => Number(sl.day) === dow);
+              const studentBatch = (state.batches || []).find(b => b.active !== false && b.studentIds.includes(s.id) && (b.schedule?.some(sl => Number(sl.day) === dow) || b.scheduleDays?.includes(dayName)));
+              const batchSlot = studentBatch?.schedule?.find(sl => Number(sl.day) === dow);
+              const resolvedTime = individualSlot?.time || s.scheduleTime || batchSlot?.time || studentBatch?.scheduleTime || '';
+              const resolvedDuration = individualSlot?.duration || batchSlot?.duration || 60;
+
               return (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -375,14 +380,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <div>
                       <div style={{ fontWeight: 600 }}>{s.name}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                        {slot?.time ? fmtTime(slot.time) : 'No specific time'}
+                        {resolvedTime ? fmtTime(resolvedTime) : 'No specific time'}
                       </div>
                     </div>
                   </div>
                   <button
                     className="btn primary xs"
                     style={{ borderRadius: '99px' }}
-                    onClick={() => onOpenLessonModal({ studentId: s.id, time: slot?.time, duration: slot?.duration })}
+                    onClick={() => onOpenLessonModal({ studentId: s.id, time: resolvedTime, duration: resolvedDuration })}
                   >
                     +1 Log Today's Class
                   </button>

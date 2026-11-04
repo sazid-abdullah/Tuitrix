@@ -20,7 +20,8 @@ import {
 } from '../services/ai';
 import { fmtDate, uid, todayISO } from '../utils/date';
 import { SavedDoc, SavedAiResource } from '../types';
-import { isProUser, FREE_TIER_MAX_SAVED_RESOURCES, getDailyAiQuotaState } from '../utils/tierLimits';
+import { isProUser, FREE_TIER_MAX_SAVED_RESOURCES, getDailyAiQuotaState, canSaveAiResource } from '../utils/tierLimits';
+import { isOwnerEmail } from '../utils/auth';
 import { RewardedAdModal } from '../components/RewardedAdModal';
 
 interface AIViewProps {
@@ -60,7 +61,7 @@ export const AIView: React.FC<AIViewProps> = ({
   onUploadPaper,
   onImportDoc,
 }) => {
-  const { state, updateSettings, billingState, toast, saveDoc, deleteDoc, studentName, saveAiResource, deleteAiResource, toggleFavoriteAiResource, setState } = useStore();
+  const { state, updateSettings, billingState, user, toast, saveDoc, deleteDoc, studentName, saveAiResource, deleteAiResource, toggleFavoriteAiResource, setState } = useStore();
   const [currentTool, setCurrentTool] = useState<string>(
     initialTool === 'saved' ? 'library' : initialTool
   );
@@ -73,14 +74,7 @@ export const AIView: React.FC<AIViewProps> = ({
     }
   }, [initialTool]);
 
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('tool=saved')) {
-      setCurrentTool('library');
-      window.history.replaceState(null, '', hash.replace('tool=saved', 'tool=library'));
-    }
-  }, []);
-  const isPro = isProUser(billingState, state.settings.tutorName);
+  const isPro = isProUser(billingState, user?.email) || isOwnerEmail(user?.email) || Boolean((state as any).isOwner);
   const [studentId, setStudentId] = useState(initialStudentId);
 
   // Form states
@@ -139,15 +133,32 @@ export const AIView: React.FC<AIViewProps> = ({
   const [localShowHeader, setLocalShowHeader] = useState(state.profile?.showPrintHeader ?? true);
   const [localShowWatermark, setLocalShowWatermark] = useState(state.profile?.showPrintWatermark ?? true);
 
-  // Route params handling for prefill
+  // Unified hash listener on mount & hashchange for tool and student prefill
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('prefill=true') && hash.includes('student=')) {
-      try {
-        const params = new URLSearchParams(hash.split('?')[1] || hash.split('student=')[1]?.split('&')[0]);
+    const handleHash = () => {
+      const hash = window.location.hash || '';
+      let paramStr = '';
+      if (hash.includes('#/ai/')) {
+        paramStr = hash.slice(hash.indexOf('#/ai/') + 5);
+      } else if (hash.includes('#/ai?')) {
+        paramStr = hash.slice(hash.indexOf('#/ai?') + 5);
+      } else if (hash.includes('?')) {
+        paramStr = hash.slice(hash.indexOf('?') + 1);
+      }
+
+      if (paramStr) {
+        const params = new URLSearchParams(paramStr);
+        const tool = params.get('tool');
+        if (tool) {
+          const validTools = ['plan', 'exam', 'worksheet', 'library', 'saved', 'results'];
+          if (validTools.includes(tool)) {
+            setCurrentTool(tool === 'saved' ? 'library' : tool);
+          }
+        }
+
         let sid = params.get('student');
-        if (!sid && hash.includes('student=')) {
-           sid = hash.split('student=')[1].split('&')[0];
+        if (!sid && paramStr.includes('student=')) {
+          sid = paramStr.split('student=')[1]?.split('&')[0];
         }
 
         if (sid) {
@@ -158,14 +169,15 @@ export const AIView: React.FC<AIViewProps> = ({
             setCurriculum(s.curriculum || '');
             if (s.subjects && s.subjects[0]) setSubject(s.subjects[0]);
 
-            // Decode and set topic if passed, fallback to last lesson topic
-            let passedTopic = params.get('topic');
+            const passedTopic = params.get('topic');
             if (passedTopic) {
-               const dec = decodeURIComponent(passedTopic);
-               setTopic(dec);
-               setTopics(dec);
+              const dec = decodeURIComponent(passedTopic);
+              setTopic(dec);
+              setTopics(dec);
             } else {
-              const studentLessons = state.lessons.filter(l => l.studentId === sid && l.status === 'taught').sort((a,b) => b.date.localeCompare(a.date) || (b.time||'').localeCompare(a.time||''));
+              const studentLessons = state.lessons
+                .filter(l => l.studentId === sid && l.status === 'taught')
+                .sort((a, b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''));
               if (studentLessons.length > 0 && studentLessons[0].topics) {
                 setTopic(studentLessons[0].topics);
                 setTopics(studentLessons[0].topics);
@@ -173,13 +185,16 @@ export const AIView: React.FC<AIViewProps> = ({
             }
           }
         }
-      } catch (e) { console.error('Prefill parse error', e); }
+      }
+    };
 
-      // Clean URL after prefill while preserving search if any
-      const cleanUrl = window.location.pathname + window.location.search + '#/ai';
-      window.history.replaceState(null, '', cleanUrl);
-    } else if (studentId) {
-      // Normal prefill without URL params
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [state.students, state.lessons]);
+
+  useEffect(() => {
+    if (studentId) {
       const s = state.students.find(x => x.id === studentId);
       if (s) {
         setGrade(s.grade || '');
@@ -187,7 +202,7 @@ export const AIView: React.FC<AIViewProps> = ({
         if (s.subjects && s.subjects[0]) setSubject(s.subjects[0]);
       }
     }
-  }, [studentId, state.students, state.lessons]);
+  }, [studentId, state.students]);
 
   // Deep-linking: auto-open viewingDoc if URL hash or search contains doc=<id>
   useEffect(() => {
@@ -420,14 +435,53 @@ export const AIView: React.FC<AIViewProps> = ({
     }
   };
 
-  const handleSaveResult = () => {
-    if (!result || result.savedId) return;
+  // Unified library: merge state.savedResources and state.docs (deduplicated by id)
+  const unifiedResources: Array<SavedAiResource & { studentId?: string | null }> = React.useMemo(() => {
+    const map = new Map<string, SavedAiResource & { studentId?: string | null }>();
 
-    // Enforce quota
-    const savedCount = (state.savedResources || []).length;
-    if (!isPro && savedCount >= FREE_TIER_MAX_SAVED_RESOURCES) {
-      toast(`Free Tier limit reached (${FREE_TIER_MAX_SAVED_RESOURCES} saved resources). Upgrade to Pro for unlimited saves.`, 'error');
-      return;
+    (state.savedResources || []).forEach(r => {
+      const legacyDoc = state.docs.find(d => d.id === r.id);
+      map.set(r.id, {
+        ...r,
+        studentId: (r as any).studentId || legacyDoc?.studentId || null,
+      });
+    });
+
+    (state.docs || []).forEach(d => {
+      if (!map.has(d.id)) {
+        map.set(d.id, {
+          id: d.id,
+          title: d.title,
+          type: d.type,
+          classLevel: d.meta?.grade || '',
+          subject: d.meta?.subject || '',
+          topic: d.meta?.topic || '',
+          content: d.content,
+          createdAt: d.createdAt,
+          studentId: d.studentId || null,
+          isFavorite: false,
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [state.savedResources, state.docs]);
+
+  const handleSaveResult = (): SavedDoc | null => {
+    if (!result) return null;
+
+    if (result.savedId) {
+      toast('Already saved to library', 'info');
+      const existing = state.docs.find(d => d.id === result.savedId);
+      if (existing) return existing;
+    }
+
+    if (!canSaveAiResource(unifiedResources.length, isPro)) {
+      toast(
+        `Free tier is limited to ${FREE_TIER_MAX_SAVED_RESOURCES} saved resources. Upgrade to Pro in Settings for unlimited resources.`,
+        'error'
+      );
+      return null;
     }
 
     const resId = uid();
@@ -438,23 +492,25 @@ export const AIView: React.FC<AIViewProps> = ({
       classLevel: grade || 'Unspecified',
       subject: subject || 'Unspecified',
       topic: topic || topics || 'Unspecified',
+      studentId: result.studentId || null,
       content: result.content,
       createdAt: new Date().toISOString()
     });
 
     // Also save to legacy docs for backwards compatibility with exams
-    const docId = resId;
-    saveDoc({
-      id: docId,
+    const savedDoc: SavedDoc = {
+      id: resId,
       type: result.tool as any,
       title: result.title,
       content: result.content,
       studentId: result.studentId || null,
       createdAt: new Date().toISOString(),
-    });
+    };
+    saveDoc(savedDoc);
 
     setResult(prev => (prev ? { ...prev, savedId: resId } : null));
     toast('💾 Saved to Resource Library', 'success');
+    return savedDoc;
   };
 
   const handlePrint = (title: string, md: string) => {
@@ -528,38 +584,6 @@ export const AIView: React.FC<AIViewProps> = ({
   const attemptsList = state.attempts
     .filter(a => !docsFilterStudent || a.studentId === docsFilterStudent)
     .sort((a, b) => b.startedAt - a.startedAt);
-
-  // Unified library: merge state.savedResources and state.docs (deduplicated by id)
-  const unifiedResources: Array<SavedAiResource & { studentId?: string | null }> = React.useMemo(() => {
-    const map = new Map<string, SavedAiResource & { studentId?: string | null }>();
-
-    (state.savedResources || []).forEach(r => {
-      const legacyDoc = state.docs.find(d => d.id === r.id);
-      map.set(r.id, {
-        ...r,
-        studentId: (r as any).studentId || legacyDoc?.studentId || null,
-      });
-    });
-
-    (state.docs || []).forEach(d => {
-      if (!map.has(d.id)) {
-        map.set(d.id, {
-          id: d.id,
-          title: d.title,
-          type: d.type,
-          classLevel: d.meta?.grade || '',
-          subject: d.meta?.subject || '',
-          topic: d.meta?.topic || '',
-          content: d.content,
-          createdAt: d.createdAt,
-          studentId: d.studentId || null,
-          isFavorite: false,
-        });
-      }
-    });
-
-    return Array.from(map.values());
-  }, [state.savedResources, state.docs]);
 
   const libraryList = unifiedResources
     .filter(r => !libraryFilterType || r.type === libraryFilterType)
@@ -816,7 +840,7 @@ export const AIView: React.FC<AIViewProps> = ({
                           deleteDoc(r.id);
                           toast('Item deleted', 'info');
                         }}
-                        style={{ color: 'var(--red-main)' }}
+                        style={{ color: 'var(--red)' }}
                         title="Delete"
                       >
                         🗑️
@@ -954,16 +978,62 @@ export const AIView: React.FC<AIViewProps> = ({
                     </select>
                   </label>
 
+                  {examFormat !== 'custom' && (
+                    <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--card2)', borderRadius: '6px' }}>
+                      <div className="form-row">
+                        {(examFormat === 'board' || examFormat === 'cq') && (
+                          <>
+                            <label className="field">
+                              CQ Count
+                              <input
+                                type="number"
+                                min="1"
+                                value={cqCount}
+                                onChange={e => setCqCount(Number(e.target.value))}
+                              />
+                            </label>
+                            <label className="field">
+                              CQs to Answer
+                              <input
+                                type="number"
+                                min="1"
+                                max={cqCount}
+                                value={cqAnswer}
+                                onChange={e => setCqAnswer(Number(e.target.value))}
+                              />
+                            </label>
+                          </>
+                        )}
+                        {(examFormat === 'board' || examFormat === 'mcq') && (
+                          <label className="field">
+                            MCQ Count
+                            <input
+                              type="number"
+                              min="1"
+                              value={mcqCount}
+                              onChange={e => setMcqCount(Number(e.target.value))}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <div style={{ marginTop: '8px', fontWeight: 600, color: 'var(--accent)' }}>
+                        Total Board Marks: {examMarks({ format: examFormat, cqAnswer, mcqCount, marks })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="form-row">
-                    <label className="field">
-                      Total marks
-                      <input
-                        type="number"
-                        min="5"
-                        value={marks}
-                        onChange={e => setMarks(Number(e.target.value))}
-                      />
-                    </label>
+                    {examFormat === 'custom' && (
+                      <label className="field">
+                        Total marks
+                        <input
+                          type="number"
+                          min="5"
+                          value={marks}
+                          onChange={e => setMarks(Number(e.target.value))}
+                        />
+                      </label>
+                    )}
                     <label className="field">
                       Time allowed (minutes)
                       <input
@@ -1196,16 +1266,12 @@ export const AIView: React.FC<AIViewProps> = ({
                         <button
                           className="btn sm"
                           onClick={() => {
-                            if (!result.savedId) handleSaveResult();
-                            const doc = state.docs.find(d => d.id === result.savedId) || {
-                              id: uid(),
-                              type: 'exam' as const,
-                              title: result.title,
-                              content: result.content,
-                              studentId: result.studentId,
-                              createdAt: new Date().toISOString(),
-                            };
-                            onStartExam(doc);
+                            const saved = result.savedId
+                              ? state.docs.find(d => d.id === result.savedId)
+                              : handleSaveResult();
+                            if (saved) {
+                              onStartExam(saved);
+                            }
                           }}
                         >
                           Start exam

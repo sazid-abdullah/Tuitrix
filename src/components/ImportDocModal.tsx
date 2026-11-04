@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { useStore } from '../store/context';
 import { uid } from '../utils/date';
 import { extractFileText } from '../services/ai';
+import { isProUser, canSaveAiResource, FREE_TIER_MAX_SAVED_RESOURCES } from '../utils/tierLimits';
 
 interface ImportDocModalProps {
   isOpen: boolean;
@@ -10,12 +11,23 @@ interface ImportDocModalProps {
 }
 
 export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose }) => {
-  const { state, saveDoc, saveAiResource, toast } = useStore();
+  const { state, saveDoc, saveAiResource, toast, billingState, user } = useStore();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [type, setType] = useState<'exam' | 'worksheet' | 'plan'>('exam');
   const [studentId, setStudentId] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setFile(null);
+      setStudentId('');
+    }
+  }, [isOpen]);
+
+  const isPro = isProUser(billingState, user?.email);
+  const currentSavedCount = new Set([...(state.savedResources || []).map(r => r.id), ...(state.docs || []).map(d => d.id)]).size;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -28,6 +40,14 @@ export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
+
+    if (!canSaveAiResource(currentSavedCount, isPro)) {
+      toast(
+        `Free Tier limit reached (${FREE_TIER_MAX_SAVED_RESOURCES} saved resources). Upgrade to Pro for unlimited saves.`,
+        'error'
+      );
+      return;
+    }
 
     setLoading(true);
     try {
@@ -53,6 +73,7 @@ export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose 
         subject: '',
         topic: '',
         content,
+        studentId: studentId || null,
         createdAt: now,
         isFavorite: false,
       });

@@ -3,7 +3,7 @@ import { Modal } from './Modal';
 import { useStore } from '../store/context';
 import { fmtDate, fmtTime } from '../utils/date';
 import { Student, Lesson } from '../types';
-import { contractStatus } from '../store/contracts';
+import { contractStatus, studentBalance } from '../store/contracts';
 import { statusBadge } from '../views/HomeView';
 import { generateWhatsAppMessage } from '../utils/whatsapp';
 
@@ -35,7 +35,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
 
   const cStatus = activeContract ? contractStatus(activeContract, state.lessons, state.payments) : null;
   const paidTotal = payments.reduce((a, p) => a + Number(p.amount || 0), 0);
-  const totalDue = cStatus ? cStatus.balance : 0;
+  const totalDue = Math.max(0, studentBalance(student.id, state.contracts, state.lessons, state.payments));
 
   const handlePrint = () => {
     window.print();
@@ -147,7 +147,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
                         </td>
                         <td>{s.obtainedMarks} / {s.totalMarks}</td>
                         <td>
-                          <span style={{ color: percent >= 80 ? 'var(--green-main)' : percent >= 60 ? 'var(--yellow-main)' : 'var(--red-main)', fontWeight: 'bold' }}>
+                          <span style={{ color: percent >= 80 ? 'var(--green)' : percent >= 60 ? 'var(--yellow)' : 'var(--red)', fontWeight: 'bold' }}>
                             {percent}%
                           </span>
                         </td>

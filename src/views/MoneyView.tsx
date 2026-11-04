@@ -6,6 +6,7 @@ import { moneySnapshot, contractStatus, goalPlan, MoneySnapshotResult } from '..
 import { callAI, MONEY_SYSTEM, moneyPrompt, renderMarkdown } from '../services/ai';
 import { Payment, Expense, Goal } from '../types';
 import { isProUser } from '../utils/tierLimits';
+import { isOwnerEmail } from '../utils/auth';
 
 interface MoneyViewProps {
   onNavigate: (route: string, param?: string) => void;
@@ -31,7 +32,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
   onAddGoal,
   onDepositGoal,
 }) => {
-  const { state, money, studentName, downloadFile, toast } = useStore();
+  const { state, money, studentName, downloadFile, toast, billingState, user } = useStore();
   const [selectedMonth, setSelectedMonth] = useState<string>(monthKey(todayISO()));
   const [moneyQ, setMoneyQ] = useState('');
   const [moneyAIResult, setMoneyAIResult] = useState<{ q: string; content: string } | null>(null);
@@ -55,10 +56,8 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
 
   // Calculate Batch vs 1-on-1 revenue logic for Collected this month
   const paysBatch = pays.filter(p => {
-    const c = state.contracts.find(c => c.id === p.contractId);
-    if (!c) return false;
-    const s = state.students.find(st => st.id === c.studentId);
-    return !!s?.batchId;
+    const s = state.students.find(st => st.id === p.studentId);
+    return Boolean(s && (s.batchId || (state.batches || []).some(b => b.studentIds.includes(s.id))));
   }).reduce((a, p) => a + Number(p.amount || 0), 0);
   const pays1on1 = income - paysBatch;
 
@@ -80,8 +79,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
   const rawMax = Math.max(1, ...series.map(x => Math.max(Number(x.inc) || 0, Number(x.exp) || 0)));
   const maxBar = Math.max(1, isNaN(rawMax) ? 1 : rawMax);
 
-  const { billingState, state: appState } = useStore();
-  const isPro = isProUser(billingState, appState.settings.tutorName);
+  const isPro = isProUser(billingState, user?.email) || isOwnerEmail(user?.email) || Boolean((state as any).isOwner);
 
   // Transactions list
   const transactions: Array<{
@@ -270,11 +268,11 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                     <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', gap: '2px', height: '100%' }}>
                       <div
                         title={`Income: ${money(s.inc)}`}
-                        style={{ flex: 1, height: `${incHeight}%`, background: 'var(--green-main)', borderRadius: '4px 4px 0 0', minHeight: '4px' }}
+                        style={{ flex: 1, height: `${incHeight}%`, background: 'var(--green)', borderRadius: '4px 4px 0 0', minHeight: '4px' }}
                       />
                       <div
                         title={`Expense: ${money(s.exp)}`}
-                        style={{ flex: 1, height: `${expHeight}%`, background: 'var(--red-main)', borderRadius: '4px 4px 0 0', minHeight: '4px' }}
+                        style={{ flex: 1, height: `${expHeight}%`, background: 'var(--red)', borderRadius: '4px 4px 0 0', minHeight: '4px' }}
                       />
                     </div>
                     <div className="meta" style={{ fontSize: '10px' }}>{parseISO(s.k + '-01').toLocaleDateString(undefined, { month: 'short' })}</div>
@@ -313,7 +311,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                         y={Number(incY.toFixed(2))}
                         width={barWidth}
                         height={Number(incH.toFixed(2))}
-                        fill="var(--green-main, #10b981)"
+                        fill="var(--green, #10b981)"
                         rx="3"
                         opacity={s.inc > 0 ? 0.9 : 0.25}
                       >
@@ -324,7 +322,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                         y={Number(expY.toFixed(2))}
                         width={barWidth}
                         height={Number(expH.toFixed(2))}
-                        fill="var(--red-main, #ef4444)"
+                        fill="var(--red, #ef4444)"
                         rx="3"
                         opacity={s.exp > 0 ? 0.85 : 0.25}
                       >
@@ -348,7 +346,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
                     <path
                       d={d}
                       fill="none"
-                      stroke="var(--green-main, #10b981)"
+                      stroke="var(--green, #10b981)"
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -361,7 +359,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
           </div>
 
           {!isPro && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(2px)' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(2px)' }}>
               <div className="btn primary" onClick={() => onNavigate('settings')}>Unlock Pro Analytics</div>
             </div>
           )}

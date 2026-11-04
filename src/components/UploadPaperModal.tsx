@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { useStore } from '../store/context';
 import { callAI, EXAM_JSON_SYSTEM, examJsonPrompt, normalizeExam, extractFileText, parseAiJson } from '../services/ai';
 import { uid } from '../utils/date';
+import { isProUser, canSaveAiResource, FREE_TIER_MAX_SAVED_RESOURCES } from '../utils/tierLimits';
 
 interface UploadPaperModalProps {
   isOpen: boolean;
@@ -17,12 +18,24 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
   onClose,
   onExamReady,
 }) => {
-  const { state, saveDoc, saveAiResource, saveExam, toast } = useStore();
+  const { state, saveDoc, saveAiResource, saveExam, toast, billingState, user } = useStore();
   const [studentId, setStudentId] = useState(initialStudentId || '');
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setStudentId(initialStudentId || '');
+      setTitle('');
+      setFile(null);
+      setError('');
+    }
+  }, [isOpen, initialStudentId]);
+
+  const isPro = isProUser(billingState, user?.email);
+  const currentSavedCount = new Set([...(state.savedResources || []).map(r => r.id), ...(state.docs || []).map(d => d.id)]).size;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -49,6 +62,13 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
     e.preventDefault();
     if (!file) {
       setError('Please select a question paper file.');
+      return;
+    }
+
+    if (!canSaveAiResource(currentSavedCount, isPro)) {
+      const limitMsg = `Free Tier limit reached (${FREE_TIER_MAX_SAVED_RESOURCES} saved resources). Upgrade to Pro for unlimited saves.`;
+      setError(limitMsg);
+      toast(limitMsg, 'error');
       return;
     }
 
@@ -86,11 +106,19 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
       const examId = uid();
       const now = new Date().toISOString();
 
+      const paperMd = textContent.trim() || normalized.questions.map((q, idx) =>
+        q.type === 'mcq'
+          ? `${q.n || idx + 1}. ${q.text}\n${q.options.map((o, oi) => `   (${String.fromCharCode(97 + oi)}) ${o}`).join('\n')}`
+          : q.type === 'cq'
+          ? `${q.n || idx + 1}. ${q.stimulus}\n${q.parts.map(p => `   (${p.label}) ${p.text} [${p.marks}]`).join('\n')}`
+          : `${q.n || idx + 1}. ${q.text} [${q.marks}]`
+      ).join('\n\n');
+
       saveDoc({
         id: docId,
         type: 'exam',
         title: examTitle,
-        content: textContent || `Exam paper generated from ${file.name}`,
+        content: paperMd,
         studentId: studentId || null,
         createdAt: now,
       });
@@ -102,7 +130,8 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
         classLevel: '',
         subject: '',
         topic: '',
-        content: textContent || `Exam paper generated from ${file.name}`,
+        content: paperMd,
+        studentId: studentId || null,
         createdAt: now,
         isFavorite: false,
       });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/context';
 import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { statusBadge } from './HomeView';
@@ -23,6 +23,11 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
   const [batchFilter, setBatchFilter] = useState(initialBatchFilter);
   const [monthFilter, setMonthFilter] = useState<string>(monthKey(todayISO()));
   const [viewMode, setViewMode] = useState<'log' | 'routine'>('log');
+
+  useEffect(() => {
+    setStudentFilter(initialStudentFilter || '');
+    setBatchFilter(initialBatchFilter || '');
+  }, [initialStudentFilter, initialBatchFilter]);
 
   const BANGLA_DAYS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   const todayDayIndex = new Date().getDay();
@@ -84,27 +89,35 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
         <div className="routine-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
           {BANGLA_DAYS.map((day, i) => {
             const isToday = i === todayBanglaIndex;
+            const banglaIndexToJsDay: Record<number, number> = { 0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 };
+            const jsDay = banglaIndexToJsDay[i];
             const scheduledItems: { id: string; name: string; type: 'student' | 'batch'; time: string }[] = [];
 
             state.students.filter(s => s.active !== false).forEach(s => {
-              if (s.scheduleDays?.includes(day)) {
-                scheduledItems.push({ id: s.id, name: s.name, type: 'student', time: s.scheduleTime || '' });
+              if (studentFilter && s.id !== studentFilter) return;
+              if (batchFilter && s.batchId !== batchFilter && !(state.batches || []).some(b => b.id === batchFilter && b.studentIds.includes(s.id))) return;
+              const matchingSlot = s.schedule?.find(sl => Number(sl.day) === jsDay);
+              if (s.scheduleDays?.includes(day) || matchingSlot) {
+                scheduledItems.push({ id: s.id, name: s.name, type: 'student', time: matchingSlot?.time || s.scheduleTime || '' });
               }
             });
 
             state.batches?.filter(b => b.active !== false).forEach(b => {
-              if (b.scheduleDays?.includes(day)) {
-                scheduledItems.push({ id: b.id, name: b.name, type: 'batch', time: b.scheduleTime || '' });
+              if (batchFilter && b.id !== batchFilter) return;
+              if (studentFilter && !b.studentIds.includes(studentFilter)) return;
+              const matchingSlot = b.schedule?.find(sl => Number(sl.day) === jsDay);
+              if (b.scheduleDays?.includes(day) || matchingSlot) {
+                scheduledItems.push({ id: b.id, name: b.name, type: 'batch', time: matchingSlot?.time || b.scheduleTime || '' });
               }
             });
 
             scheduledItems.sort((a, b) => a.time.localeCompare(b.time));
 
             return (
-              <div key={day} className={`card ${isToday ? 'highlight-today' : ''}`} style={isToday ? { border: '2px solid var(--primary)' } : {}}>
+              <div key={day} className={`card ${isToday ? 'highlight-today' : ''}`} style={isToday ? { border: '2px solid var(--accent)' } : {}}>
                 <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '1.1em', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{day}</span>
-                  {isToday && <span style={{ color: 'var(--primary)', fontSize: '0.8em', padding: '2px 6px', background: 'var(--bg)', borderRadius: '4px' }}>Today</span>}
+                  {isToday && <span style={{ color: 'var(--accent)', fontSize: '0.8em', padding: '2px 6px', background: 'var(--bg)', borderRadius: '4px' }}>Today</span>}
                 </div>
                 {scheduledItems.length === 0 ? (
                   <div className="muted small">No classes</div>

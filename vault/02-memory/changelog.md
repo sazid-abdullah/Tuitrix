@@ -6,6 +6,16 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
+## [2026-11-04] — Interactive Exam Scoring Sync, AI Mark Mapping, Board Exam Studio & AI Deep-Linking
+- Fixed `ResultView` AI mark mapping for non-CQ written questions (`q.id:0` to `q.id`), guarded empty typed answers in `handleAIMark`, and added live student profile score re-syncing on mark save.
+- Extracted `isQuestionAnswered` helper in `ExamView` to accurately treat empty CQ parts as unanswered, reset `attempt.scoreLogged` on score deletion in `context.tsx`, and corrected chart CSS variable tokens in `StudentDetailView`.
+- Upgraded `AIView` with Pro recognition for owner emails via `isOwnerEmail`, unified URL hash router supporting `#/ai/tool=...&student=...` deep-linking with student prefill, board exam parameters (`cqCount`, `cqAnswer`, `mcqCount`), and enforced `canSaveAiResource` quotas.
+- Enhanced `ai.ts` `examPrompt` and `examMarks` to support Bangladesh board exam specifications (Creative Questions + MCQs with exact marks computation), and ensured deterministic SavedDoc ID reuse in `handleSaveResult` for seamless "Start exam" navigation.
+- Synced `initialStudentId` and enforced `canSaveAiResource` Free-tier quotas across `UploadPaperModal` and `ImportDocModal`, with question Markdown reconstruction (`paperMd`) from parsed MCQs, CQs, and written questions on image/PDF uploads.
+- Wired `studentBalance` in `ParentReportModal` for accurate multi-contract `Total Due` calculation and replaced legacy `-main` color tokens with design system CSS variables (`var(--green)`, `var(--yellow)`, `var(--red)`).
+- Added `ClassesView` `initialBatchFilter` deep-link support, Weekly Routine slot lookup across `s.schedule` (`day: 6`) & `s.scheduleDays` with batch filtering, and replaced invalid `var(--primary)` tokens with `var(--accent)`.
+- Updated `MoneyView` with `user?.email` owner Pro detection, studentId-based batch revenue attribution without contractId requirement, dark-theme lock overlay background, and resolved `HomeView` Radar batch/slot times.
+
 ## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
 - Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.
 - Added `resetKey` and `componentDidUpdate` auto-reset to `ErrorBoundary` on route changes, replacing full window reload with clean `parseHash()` view re-mounting.

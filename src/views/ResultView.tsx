@@ -152,13 +152,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
         }
       }
 
-      if (!items.length) {
+      const nonEmptyItems = items.filter(item => item.parts && item.parts.length > 0);
+
+      if (!nonEmptyItems.length) {
         toast('No typed answers to evaluate automatically.', 'info');
         setAiBusy(false);
         return;
       }
 
-      const promptText = markPrompt(items);
+      const promptText = markPrompt(nonEmptyItems);
       const res = await callAI(MARK_SYSTEM, promptText, state, { temperature: 0.2, json: true, onFallback: (msg) => toast(msg, 'info') });
       const parsed = parseAiJson(res);
 
@@ -188,7 +190,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
     for (const [k, v] of Object.entries(aiMarks)) {
       const maxVal = maxMarksMap[k] ?? 100;
       const clamped = clampMark(v.marks, maxVal);
-      updated[k] = typeof clamped === 'number' ? clamped : 0;
+      const clampedVal = typeof clamped === 'number' ? clamped : 0;
+      updated[k] = clampedVal;
+      if (k.endsWith(':0')) {
+        const qId = k.slice(0, -2);
+        const q = wqs.find(question => question.id === qId);
+        if (q && q.type !== 'cq') {
+          updated[q.id] = clampedVal;
+        }
+      }
     }
     setMarksState(updated);
     toast('Applied AI suggested marks', 'info');
@@ -205,6 +215,39 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
         cleanMarks[k] = clampMark(v, maxVal);
       }
     }
+
+    let newWrittenGot = 0;
+    for (const q of wqs) {
+      if (q.type === 'cq') {
+        for (let i = 0; i < q.parts.length; i++) {
+          const m = cleanMarks[`${q.id}:${i}`];
+          if (m !== undefined && m !== '') {
+            const clamped = clampMark(m, q.parts[i].marks);
+            newWrittenGot += typeof clamped === 'number' ? clamped : 0;
+          }
+        }
+      } else {
+        const m = cleanMarks[q.id];
+        if (m !== undefined && m !== '') {
+          const clamped = clampMark(m, q.marks);
+          newWrittenGot += typeof clamped === 'number' ? clamped : 0;
+        }
+      }
+    }
+
+    if (attempt.scoreLogged && activeStudentId) {
+      addExamScore(activeStudentId, {
+        id: attempt.id,
+        studentId: activeStudentId,
+        title: attempt.title,
+        subject: exam.title,
+        date: todayISO(),
+        obtainedMarks: mcqGot + newWrittenGot,
+        totalMarks: totalMax,
+        remarks: `Completed via Interactive Exam (attempt:${attempt.id})`,
+      });
+    }
+
     const updated = {
       ...attempt,
       status: 'marked' as const,
@@ -227,7 +270,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
     }
 
     addExamScore(activeStudentId, {
-      id: uid(),
+      id: attempt.id,
       studentId: activeStudentId,
       title: attempt.title,
       subject: exam.title,

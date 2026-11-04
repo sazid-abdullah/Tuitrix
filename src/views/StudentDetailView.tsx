@@ -588,7 +588,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
         {validScores.length > 1 && (
           <div className="card" style={{ marginBottom: '16px', padding: '16px' }}>
-            <h3 style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-light)' }}>Performance Trend</h3>
+            <h3 style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)' }}>Performance Trend</h3>
             <div style={{ height: '120px', display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
               {[...validScores].reverse().map(s => {
                 const total = Math.max(1, Number(s.totalMarks) || 1);
@@ -596,7 +596,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 const rawPercent = Math.round((got / total) * 100);
                 const percent = Math.max(0, Math.min(100, isNaN(rawPercent) ? 0 : rawPercent));
                 const height = Math.max(5, percent); // min height 5%
-                const color = percent >= 80 ? 'var(--green-main)' : percent >= 60 ? 'var(--yellow-main)' : 'var(--red-main)';
+                const color = percent >= 80 ? 'var(--green)' : percent >= 60 ? 'var(--yellow)' : 'var(--red)';
                 return (
                   <div key={s.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
                     <div style={{ fontSize: '10px', marginBottom: '4px', fontWeight: 'bold' }}>{percent}%</div>
@@ -630,15 +630,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                   <div key={s.id} className="row" style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                     <div className="grow" style={{ flex: 1 }}>
                       <div className="title" style={{ fontWeight: 'bold' }}>{s.title} <span className="badge" style={{ marginLeft: '8px' }}>{s.subject}</span></div>
-                      <div className="meta" style={{ fontSize: '12px', color: 'var(--text-light)' }}>{fmtDate(s.date)} {s.remarks && `• ${s.remarks}`}</div>
+                      <div className="meta" style={{ fontSize: '12px', color: 'var(--muted)' }}>{fmtDate(s.date)} {s.remarks && `• ${s.remarks}`}</div>
                     </div>
                     <div style={{ textAlign: 'right', paddingRight: '12px' }}>
-                      <div className="title" style={{ fontWeight: 'bold', color: percent >= 80 ? 'var(--green-main)' : percent >= 60 ? 'var(--yellow-main)' : 'var(--red-main)' }}>
+                      <div className="title" style={{ fontWeight: 'bold', color: percent >= 80 ? 'var(--green)' : percent >= 60 ? 'var(--yellow)' : 'var(--red)' }}>
                         {percent}%
                       </div>
-                      <div className="meta" style={{ fontSize: '12px', color: 'var(--text-light)' }}>{s.obtainedMarks} / {s.totalMarks}</div>
+                      <div className="meta" style={{ fontSize: '12px', color: 'var(--muted)' }}>{s.obtainedMarks} / {s.totalMarks}</div>
                     </div>
-                    <button className="btn sm ghost" onClick={() => deleteExamScore(student.id, s.id)} title="Delete" style={{ color: 'var(--red-main)', padding: '4px 8px' }}>
+                    <button className="btn sm ghost" onClick={() => deleteExamScore(student.id, s.id)} title="Delete" style={{ color: 'var(--red)', padding: '4px 8px' }}>
                       Delete
                     </button>
                   </div>

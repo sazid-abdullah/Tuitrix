@@ -738,9 +738,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const student = s.students.find(st => st.id === studentId);
       if (!student) return s;
       const currentScores = student.examScores || [];
+      const targetScore = currentScores.find(sc => sc.id === scoreId);
       return {
         ...s,
-        students: s.students.map(st => st.id === studentId ? { ...st, examScores: currentScores.filter(sc => sc.id !== scoreId) } : st)
+        students: s.students.map(st => st.id === studentId ? { ...st, examScores: currentScores.filter(sc => sc.id !== scoreId) } : st),
+        attempts: (s.attempts || []).map(a => (a.id === scoreId || (targetScore?.remarks && targetScore.remarks.includes(`attempt:${a.id}`))) ? { ...a, scoreLogged: false } : a),
       };
     });
   }, []);
