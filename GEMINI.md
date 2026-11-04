@@ -16,8 +16,9 @@ Welcome to Tuitrix (`C:\Users\ASUS\Tuitrix`), the offline-first tuition manageme
    - Always parse AI completions with `parseAiJson(res)` from `src/services/ai.ts` (never raw `JSON.parse(res)`).
    - Use browser-native `extractFileText(file)` from `src/services/ai.ts` for `.docx`, `.pdf`, `.txt`, and `.md` files without node/binary dependencies.
 
-3. **Firestore Security & Data Paths**:
+3. **Firestore Security, Storage Keys & Data Paths**:
    - Authorized public read & owner write (`abdullahsazid109@gmail.com`) on `/app_config/{docId}`.
+   - Production `localStorage` keys: primary store data uses `'tuitrix_data'` (never `'tuitrix_data_v1'`), theme uses `'tuitrix_theme'`, pricing & FAQ fallback uses `'tuitrix_pricing'`, and onboarding gate uses `'tuitrix_entered_app'`.
    - Pricing, promo codes, and FAQs are located at `doc(db, 'app_config', 'pricing')` with `localStorage` fallback key `'tuitrix_pricing'`.
    - Upgrade requests reside in `collection(db, 'upgrade_requests')`.
    - Tutor state synchronizes to `doc(db, 'users/{uid}/data/appState')` and `doc(db, 'users/{uid}/data/billing')`.

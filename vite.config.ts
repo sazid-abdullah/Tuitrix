@@ -8,6 +8,9 @@ import { defineConfig as defineVitestConfig, mergeConfig } from 'vitest/config';
 export default mergeConfig(defineViteConfig({
   base: './',
   plugins: [react()],
+  build: {
+    chunkSizeWarningLimit: 700,
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,

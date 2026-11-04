@@ -39,7 +39,7 @@ try {
   console.warn("Failed to initialize Firebase core services:", e);
 }
 
-if (app) {
+if (app && typeof window !== 'undefined' && 'indexedDB' in window && import.meta.env.MODE !== 'test') {
   try {
     analytics = getAnalytics(app);
   } catch (e) {
@@ -183,7 +183,7 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
       } catch {}
     }
 
-    if (db) {
+    if (db && auth?.currentUser?.email?.trim().toLowerCase() === 'abdullahsazid109@gmail.com') {
       try {
         const pricingRef = doc(db, 'app_config', 'pricing');
         const pricingSnap = await getDoc(pricingRef);
@@ -298,6 +298,7 @@ export const fetchPlatformTelemetry = async (pricingConfig?: PricingConfig): Pro
 
   // Per-promo usage stats
   const promoUsageMap: Record<string, { count: number; totalDiscountBdt: number; revenueGeneratedBdt: number }> = {};
+  const reqRedemptionsByCode: Record<string, number> = {};
 
   (pricing.promoCodes || []).forEach(p => {
     promoUsageMap[p.code.toUpperCase()] = {
@@ -309,17 +310,22 @@ export const fetchPlatformTelemetry = async (pricingConfig?: PricingConfig): Pro
 
   let totalPromoRedemptions = 0;
   allRequests.forEach(req => {
-    if (req.promoCodeUsed) {
+    if (req.promoCodeUsed && req.status !== 'rejected') {
       const code = req.promoCodeUsed.trim().toUpperCase();
       totalPromoRedemptions++;
+      reqRedemptionsByCode[code] = (reqRedemptionsByCode[code] || 0) + 1;
       if (!promoUsageMap[code]) {
         promoUsageMap[code] = { count: 0, totalDiscountBdt: 0, revenueGeneratedBdt: 0 };
       }
       const configPromo = (pricing.promoCodes || []).find(p => p.code.toUpperCase() === code);
-      promoUsageMap[code].count = Math.max(promoUsageMap[code].count, configPromo?.usedCount || 0);
-      const discount = req.discountAmountBdt !== undefined ? req.discountAmountBdt : Math.max(0, req.amount - (req.finalAmountBdt || req.amount));
-      promoUsageMap[code].totalDiscountBdt += discount;
-      promoUsageMap[code].revenueGeneratedBdt += (req.finalAmountBdt !== undefined ? req.finalAmountBdt : req.amount);
+      promoUsageMap[code].count = Math.max(configPromo?.usedCount || 0, reqRedemptionsByCode[code] || 0);
+
+      if (req.status === 'approved') {
+        const discount = req.discountAmountBdt !== undefined ? req.discountAmountBdt : Math.max(0, req.amount - (req.finalAmountBdt || req.amount));
+        const finalAmount = req.finalAmountBdt !== undefined ? req.finalAmountBdt : req.amount;
+        promoUsageMap[code].totalDiscountBdt += discount;
+        promoUsageMap[code].revenueGeneratedBdt += finalAmount;
+      }
     }
   });
 
@@ -547,11 +553,15 @@ export const fetchPricingConfig = async (): Promise<PricingConfig> => {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const data = docSnap.data() as PricingConfig;
-      return {
+      const mergedConfig: PricingConfig = {
         ...DEFAULT_PRICING,
         ...data,
         faqs: (data.faqs && data.faqs.length > 0) ? data.faqs : DEFAULT_FAQS
       };
+      try {
+        localStorage.setItem('tuitrix_pricing', JSON.stringify(mergedConfig));
+      } catch {}
+      return mergedConfig;
     }
   } catch (e) {
     console.error("Failed to fetch pricing config", e);
@@ -561,8 +571,8 @@ export const fetchPricingConfig = async (): Promise<PricingConfig> => {
 
 export const updatePricingConfig = async (config: PricingConfig): Promise<void> => {
   const data = { ...config, updatedAt: Date.now() };
+  localStorage.setItem('tuitrix_pricing', JSON.stringify(data));
   if (!db) {
-    localStorage.setItem('tuitrix_pricing', JSON.stringify(data));
     return;
   }
   await setDoc(doc(db, 'app_config', 'pricing'), data);

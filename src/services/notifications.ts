@@ -1,10 +1,9 @@
-import { getMessaging, getToken, Messaging } from 'firebase/messaging';
 import { app, auth, db } from './firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { Student, Batch, Contract } from '../types';
 import { todayISO, WEEKDAYS, parseISO } from '../utils/date';
 
-let messaging: Messaging | null = null;
+let messaging: any = null;
 if (app && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   try {
     // Only attempt to initialize messaging if it is supported (avoids vitest crashes)
@@ -42,6 +41,7 @@ export const registerFcmToken = async (uid: string): Promise<string | null> => {
   try {
     const permission = await requestNotificationPermission();
     if (permission === 'granted') {
+      const { getToken } = await import('firebase/messaging');
       const token = await getToken(messaging, { vapidKey });
       if (token && db) {
         // Save to tutor's profile or user doc

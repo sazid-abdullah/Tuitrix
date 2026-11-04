@@ -159,8 +159,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate, onLogi
 
   const username = user?.displayName || (user?.email ? user.email.split('@')[0] : 'User');
   const userInitial = (user?.displayName?.[0] || user?.email?.[0] || 'U').toUpperCase();
-  const isPro = user ? isProUser(billingState, user.email) : false;
   const isOwner = isOwnerEmail(user?.email || auth?.currentUser?.email) || Boolean((state as any).isOwner) || localStorage.getItem('tuitrix_mock_owner') === 'true';
+  const isPro = isOwner || (user ? isProUser(billingState, user.email) : false);
 
   return (
     <>

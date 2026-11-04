@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Modal } from './Modal';
 import { useStore } from '../store/context';
-import { isProUser } from '../utils/tierLimits';
+import { isProUser, getFreeStudentLimit } from '../utils/tierLimits';
 
 interface BulkStudentModalProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface BulkStudentModalProps {
 }
 
 export const BulkStudentModal: React.FC<BulkStudentModalProps> = ({ isOpen, onClose }) => {
-  const { state, saveStudent, saveContract, toast, billingState, user } = useStore();
+  const { state, saveStudent, saveBatch, saveContract, toast, billingState, user } = useStore();
   const [text, setText] = useState('');
   const [batchId, setBatchId] = useState<string>('');
 
@@ -35,14 +35,16 @@ export const BulkStudentModal: React.FC<BulkStudentModalProps> = ({ isOpen, onCl
     if (parsedStudents.length === 0) return;
 
     const isPro = isProUser(billingState, user?.email);
-    const totalStudentsAfterImport = state.students.length + parsedStudents.length;
+    const maxFreeStudents = getFreeStudentLimit();
+    const activeStudentsCount = state.students.filter(s => s.active !== false).length;
 
-    if (!isPro && totalStudentsAfterImport > 15) {
-      toast('Free tier limited to 15 students. Please upgrade to Pro to add more.', 'error');
+    if (!isPro && activeStudentsCount + parsedStudents.length > maxFreeStudents) {
+      toast(`Free tier limited to ${maxFreeStudents} students. Please upgrade to Pro to add more.`, 'error');
       return;
     }
 
     let importedCount = 0;
+    const newStudentIds: string[] = [];
     for (const data of parsedStudents) {
       const studentId = saveStudent({
         name: data.name,
@@ -50,6 +52,8 @@ export const BulkStudentModal: React.FC<BulkStudentModalProps> = ({ isOpen, onCl
         batchId: batchId || null,
         active: true
       });
+      newStudentIds.push(studentId);
+
 
       if (data.fee !== undefined && !isNaN(data.fee) && !batchId) {
         saveContract({
@@ -62,8 +66,19 @@ export const BulkStudentModal: React.FC<BulkStudentModalProps> = ({ isOpen, onCl
           billing: 'end',
           status: 'active'
         });
+
       }
       importedCount++;
+    }
+
+    if (batchId) {
+      const targetBatch = state.batches?.find(b => b.id === batchId);
+      if (targetBatch) {
+        saveBatch({
+          ...targetBatch,
+          studentIds: Array.from(new Set([...(targetBatch.studentIds || []), ...newStudentIds])),
+        });
+      }
     }
 
     toast(`Successfully imported ${importedCount} students`, 'success');

@@ -3,7 +3,7 @@ import { PricingConfig } from '../types';
 import { fetchPricingConfig, DEFAULT_FAQS } from '../services/firebase';
 import { ApkShareModal } from '../components/ApkShareModal';
 import { useStore } from '../store/context';
-import { isProUser } from '../utils/tierLimits';
+import { isProUser, getFreeStudentLimit } from '../utils/tierLimits';
 
 interface LandingViewProps {
   onEnterApp: () => void;
@@ -27,7 +27,9 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
     billingState = null;
   }
 
-  const [lang, setLang] = useState<'EN' | 'BN'>('EN');
+  const [lang, setLang] = useState<'EN' | 'BN'>(() => {
+    return (localStorage.getItem('tuitrix_lang') as 'EN' | 'BN') || 'EN';
+  });
   const [activeTab, setActiveTab] = useState(1);
   const [cycleClicks, setCycleClicks] = useState(11);
   const [showEnReport, setShowEnReport] = useState(false);
@@ -60,6 +62,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
   const handleToggleLang = () => {
     const nextLang = lang === 'EN' ? 'BN' : 'EN';
     setLang(nextLang);
+    localStorage.setItem('tuitrix_lang', nextLang);
     window.dispatchEvent(new CustomEvent('tuitrix_lang_change', { detail: nextLang }));
   };
 
@@ -84,7 +87,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
     fetchPricingConfig().then(config => setPricingConfig(config)).catch(() => {});
   }, []);
 
-  const monthlyPriceBdtStr = pricingConfig ? `৳${pricingConfig.monthlyPriceBdt}` : '৳199';
+  const monthlyPriceBdtStr = `৳${pricingConfig?.monthlyPriceBdt ?? 99}`;
   const isPro = user ? isProUser(billingState, user.email) : false;
 
   return (
@@ -321,7 +324,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
             <h3>Free Forever</h3>
             <div className="price">৳0 <span>/ month</span></div>
             <ul>
-              <li>Up to 15 Students & 2 Batches</li>
+              <li>Up to {pricingConfig?.freeStudentLimit ?? getFreeStudentLimit()} Students & 2 Batches</li>
               <li>5 AI Exam/Note Requests per day</li>
               <li>5 Saved AI Library Resources</li>
               <li>Bilingual WhatsApp Reminders</li>
@@ -349,7 +352,21 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
               <span className="nagad-badge">Nagad</span>
               <span className="rocket-badge">Rocket</span>
             </div>
-            <button className="cta-primary" onClick={user ? onEnterApp : onSignIn}>
+            <button
+              className="cta-primary"
+              onClick={() => {
+                if (!user) {
+                  onSignIn();
+                } else if (!isPro) {
+                  onEnterApp();
+                  setTimeout(() => {
+                    window.location.hash = '#/settings';
+                  }, 0);
+                } else {
+                  onEnterApp();
+                }
+              }}
+            >
               {isPro
                 ? (lang === 'EN' ? 'Pro Activated ✨' : 'প্রো সক্রিয় ✨')
                 : (lang === 'EN' ? 'Get Pro via TrxID' : 'প্রো কিনুন')}
@@ -381,18 +398,30 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
       <section className="faq-section">
         <h2>{lang === 'BN' ? 'সাধারণ জিজ্ঞাসা (FAQ)' : 'Frequently Asked Questions'}</h2>
         <div className="faq-list">
-          {((pricingConfig?.faqs && pricingConfig.faqs.length > 0) ? pricingConfig.faqs : (DEFAULT_FAQS || [])).slice(0, 6).map((faq) => (
-            <div key={faq.id} className="faq-item">
-              <h4>{lang === 'BN' ? faq.qBn : faq.qEn}</h4>
-              <p>{lang === 'BN' ? faq.aBn : faq.aEn}</p>
-            </div>
-          ))}
+          {[...((pricingConfig?.faqs && pricingConfig.faqs.length > 0) ? pricingConfig.faqs : (DEFAULT_FAQS || []))]
+            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+            .slice(0, 6)
+            .map((faq) => {
+              const question = (lang === 'BN' && faq.qBn?.trim()) ? faq.qBn : faq.qEn;
+              const answer = (lang === 'BN' && faq.aBn?.trim()) ? faq.aBn : faq.aEn;
+              return (
+                <div key={faq.id} className="faq-item">
+                  <h4>{question}</h4>
+                  <p>{answer}</p>
+                </div>
+              );
+            })}
         </div>
         <div style={{ textAlign: 'center', marginTop: '24px' }}>
           <button
             type="button"
             className="btn primary"
-            onClick={() => { window.location.hash = '#/help'; }}
+            onClick={() => {
+              onEnterApp();
+              setTimeout(() => {
+                window.location.hash = '#/help';
+              }, 0);
+            }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
           >
             {lang === 'BN' ? 'সম্পূর্ণ সহায়তা কেন্দ্র ও প্রশ্নোত্তর দেখুন →' : 'View Full Help Centre & FAQ →'}

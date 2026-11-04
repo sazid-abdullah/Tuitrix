@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import { Student, ScheduleSlot } from '../types';
 import { WEEKDAYS } from '../utils/date';
 import { useStore } from '../store/context';
+import { isProUser, canAddStudent, getFreeStudentLimit } from '../utils/tierLimits';
 
 interface StudentModalProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ export const StudentModal: React.FC<StudentModalProps> = ({
   onClose,
   onStudentSaved,
 }) => {
-  const { saveStudent, toast } = useStore();
+  const { state, billingState, user, saveStudent, toast } = useStore();
   const isNew = !student;
 
   const [name, setName] = useState('');
@@ -96,6 +97,15 @@ export const StudentModal: React.FC<StudentModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    if (isNew) {
+      const isPro = isProUser(billingState, user?.email);
+      const activeStudentsCount = state.students.filter(s => s.active !== false).length;
+      if (!canAddStudent(activeStudentsCount, isPro)) {
+        toast(`Free tier is limited to ${getFreeStudentLimit()} active students. Upgrade to Pro in Settings for unlimited students.`, 'error');
+        return;
+      }
+    }
 
     const data: Omit<Student, 'id'> & { id?: string } = {
       id: student?.id,

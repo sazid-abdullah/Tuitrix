@@ -81,6 +81,13 @@ export const HelpCenterView: React.FC<HelpCenterViewProps> = ({ onNavigate }) =>
     });
   };
 
+  const handleToggleLang = () => {
+    const nextLang = lang === 'EN' ? 'BN' : 'EN';
+    setLang(nextLang);
+    localStorage.setItem('tuitrix_lang', nextLang);
+    window.dispatchEvent(new CustomEvent('tuitrix_lang_change', { detail: nextLang }));
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
   };
@@ -97,7 +104,8 @@ export const HelpCenterView: React.FC<HelpCenterViewProps> = ({ onNavigate }) =>
   const supportEmail = pricingConfig?.supportEmail || 'abdullahsazid109@gmail.com';
   const rawWa = pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '01700000000';
   const cleanedWa = rawWa.replace(/\D/g, '');
-  const waUrl = `https://wa.me/88${cleanedWa}?text=${encodeURIComponent(
+  const waPhone = cleanedWa.length === 11 && cleanedWa.startsWith('01') ? '88' + cleanedWa : cleanedWa;
+  const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(
     lang === 'BN'
       ? 'হ্যালো টুইট্রিক্স সাপোর্ট, আমার সহায়তা প্রয়োজন।'
       : 'Hello Tuitrix Support, I need assistance with...'
@@ -115,9 +123,13 @@ export const HelpCenterView: React.FC<HelpCenterViewProps> = ({ onNavigate }) =>
           >
             ← {lang === 'BN' ? 'হোমে ফিরে যান' : 'Back to Home'}
           </button>
-          <div className="help-lang-badge">
+          <button
+            type="button"
+            className="btn outline small help-lang-badge"
+            onClick={handleToggleLang}
+          >
             {lang === 'BN' ? '🇧🇩 বাংলা' : '🌐 English'}
-          </div>
+          </button>
         </div>
 
         <h1 className="help-hero-title">
@@ -276,8 +288,8 @@ export const HelpCenterView: React.FC<HelpCenterViewProps> = ({ onNavigate }) =>
           <div className="faq-accordion">
             {filteredFaqs.map(faq => {
               const isExpanded = expandedFaqIds.has(faq.id);
-              const question = lang === 'BN' ? faq.qBn : faq.qEn;
-              const answer = lang === 'BN' ? faq.aBn : faq.aEn;
+              const question = (lang === 'BN' && faq.qBn?.trim()) ? faq.qBn : faq.qEn;
+              const answer = (lang === 'BN' && faq.aBn?.trim()) ? faq.aBn : faq.aEn;
 
               return (
                 <div

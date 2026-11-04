@@ -1,11 +1,12 @@
 import { BillingState, DailyAiAdUsage } from '../types';
+import { isOwnerEmail } from './auth';
 
 export const FREE_TIER_MAX_STUDENTS = 15;
 export const FREE_TIER_MAX_BATCHES = 2;
 export const FREE_TIER_DAILY_AI_ADS_LIMIT = 5;
 
 export const isProUser = (billing?: BillingState | null, userEmail?: string | null): boolean => {
-  if (userEmail === 'abdullahsazid109@gmail.com') return true;
+  if (isOwnerEmail(userEmail)) return true;
   if (!billing) return false;
 
   const isProPlan = billing.plan === 'pro';
@@ -19,8 +20,22 @@ export const isProUser = (billing?: BillingState | null, userEmail?: string | nu
   return true;
 };
 
-export const canAddStudent = (currentCount: number, isPro: boolean): boolean => {
-  return isPro || currentCount < FREE_TIER_MAX_STUDENTS;
+export const getFreeStudentLimit = (fallback: number = FREE_TIER_MAX_STUDENTS): number => {
+  try {
+    const raw = localStorage.getItem('tuitrix_pricing');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const limit = Number(parsed?.freeStudentLimit);
+      if (!isNaN(limit) && limit > 0) {
+        return limit;
+      }
+    }
+  } catch {}
+  return fallback;
+};
+
+export const canAddStudent = (currentCount: number, isPro: boolean, customLimit?: number): boolean => {
+  return isPro || currentCount < (customLimit ?? getFreeStudentLimit());
 };
 
 export const canAddBatch = (currentCount: number, isPro: boolean): boolean => {

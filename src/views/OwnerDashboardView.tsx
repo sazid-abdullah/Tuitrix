@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { FaqItem, PricingConfig, TrxUpgradeRequest, PromoCode, PlatformTelemetry } from '../types';
 import {
   auth,
+  onAuthStateChanged,
   fetchPricingConfig,
   updatePricingConfig,
   fetchAllUpgradeRequests,
@@ -21,6 +22,9 @@ interface OwnerDashboardViewProps {
 
 export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNavigate }) => {
   const { toast } = useStore();
+  const [isAuthorizedOwner, setIsAuthorizedOwner] = useState<boolean>(() => {
+    return isOwnerEmail(auth?.currentUser?.email) || !auth;
+  });
   const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'promos' | 'faqs'>('overview');
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>(DEFAULT_PRICING);
   const [faqs, setFaqs] = useState<FaqItem[]>(DEFAULT_FAQS);
@@ -94,6 +98,20 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!auth || typeof onAuthStateChanged !== 'function') return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthorizedOwner(isOwnerEmail(user.email));
+      } else {
+        setIsAuthorizedOwner(isOwnerEmail(auth?.currentUser?.email) || !auth);
+      }
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
   // Filtered TrxID requests
   const filteredRequests = useMemo(() => {
     return allRequests.filter(req => {
@@ -131,6 +149,7 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
         ...pricingConfig,
         monthlyPriceBdt: Number(pricingForm.monthlyPriceBdt) || 99,
         yearlyPriceBdt: Number(pricingForm.yearlyPriceBdt) || 999,
+        freeStudentLimit: Math.max(1, Number(pricingForm.freeStudentLimit) || 5),
         bkashNumber: pricingForm.bkashNumber.trim(),
         nagadNumber: pricingForm.nagadNumber.trim(),
         rocketNumber: pricingForm.rocketNumber.trim(),
@@ -353,6 +372,21 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
     setFaqModalOpen(false);
   };
 
+  if (!isAuthorizedOwner) {
+    return (
+      <div className="card" style={{ maxWidth: '500px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>🔒</div>
+        <h2>Access Denied</h2>
+        <p className="muted small" style={{ margin: '12px 0 24px 0' }}>
+          This dashboard is restricted to authorized platform owners.
+        </p>
+        <button className="btn primary" onClick={() => onNavigate('home')}>
+          🏠 Return to Dashboard
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="owner-dashboard-container">
       {/* Header */}
@@ -486,8 +520,9 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                       totalDiscountBdt: 0,
                       revenueGeneratedBdt: 0,
                     };
+                    const usedCount = stats.count ?? (p.usedCount || 0);
                     const maxDisplay = p.maxUses && p.maxUses > 0 ? p.maxUses : '∞';
-                    const isExhausted = p.maxUses && p.maxUses > 0 && (p.usedCount || 0) >= p.maxUses;
+                    const isExhausted = Boolean(p.maxUses && p.maxUses > 0 && usedCount >= p.maxUses);
 
                     return (
                       <tr key={p.code}>
@@ -499,7 +534,7 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                           {p.discountType === 'flat' ? `৳${p.discountValue || p.discountPercent} flat` : `${p.discountValue || p.discountPercent}%`}
                         </td>
                         <td>
-                          <span style={{ fontWeight: 600 }}>{p.usedCount || 0}</span> / {maxDisplay}
+                          <span style={{ fontWeight: 600 }}>{usedCount}</span> / {maxDisplay}
                           {isExhausted && <span className="badge red" style={{ marginLeft: '6px' }}>Cap Reached</span>}
                         </td>
                         <td style={{ fontWeight: 'bold', color: 'var(--green)' }}>
@@ -687,6 +722,16 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                   type="number"
                   value={pricingForm.yearlyPriceBdt}
                   onChange={e => setPricingForm({ ...pricingForm, yearlyPriceBdt: Number(e.target.value) })}
+                  required
+                />
+              </label>
+              <label className="field">
+                Free Tier Student Limit *
+                <input
+                  type="number"
+                  min={1}
+                  value={pricingForm.freeStudentLimit ?? 5}
+                  onChange={e => setPricingForm({ ...pricingForm, freeStudentLimit: Number(e.target.value) })}
                   required
                 />
               </label>

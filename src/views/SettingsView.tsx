@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '../store/context';
 import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { AI_PROVIDERS, fetchModelList, callAI, autoModel, readModelCache, getDefaultModel, sanitizeModelId } from '../services/ai';
@@ -12,6 +12,15 @@ import { ApkShareModal } from '../components/ApkShareModal';
 import { isProUser } from '../utils/tierLimits';
 
 const CURRENCIES = ['৳', '₹', 'Rs ', '$', '£', '€', 'RM ', 'SAR '];
+
+export function formatBdWhatsAppNumber(raw?: string): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('01')) {
+    return `88${digits}`;
+  }
+  return digits;
+}
 
 export const SettingsView: React.FC = () => {
   const {
@@ -307,6 +316,21 @@ export const SettingsView: React.FC = () => {
     e.target.value = '';
   };
 
+  const getSubtotal = () => planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
+
+  const activePromoEvaluation = useMemo(() => {
+    if (!appliedPromo) return null;
+    const base = getSubtotal();
+    const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === appliedPromo.code.toUpperCase());
+    return evaluatePromoCode(found, base);
+  }, [appliedPromo, planTerm, pricingConfig]);
+
+  const getDiscount = () => {
+    return activePromoEvaluation?.valid ? activePromoEvaluation.discountAmount : 0;
+  };
+
+  const getTotal = () => Math.max(0, getSubtotal() - getDiscount());
+
   const handleUpgradeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth?.currentUser) {
@@ -314,40 +338,35 @@ export const SettingsView: React.FC = () => {
       return;
     }
 
-    const phone = senderPhone.trim();
-    if (!/^01[3-9]\d{8}$/.test(phone)) {
-      toast('Please enter a valid 11-digit BD phone number', 'error');
-      return;
-    }
+    const baseAmount = getSubtotal();
+    const discountAmount = getDiscount();
+    const finalAmount = Math.max(0, baseAmount - discountAmount);
 
+    const phone = senderPhone.trim();
     const tid = trxId.trim().toUpperCase();
-    if (tid.length < 6) {
-      toast('Please enter a valid Transaction ID', 'error');
-      return;
+
+    if (finalAmount > 0) {
+      if (!/^01[3-9]\d{8}$/.test(phone)) {
+        toast('Please enter a valid 11-digit BD phone number', 'error');
+        return;
+      }
+
+      if (tid.length < 6) {
+        toast('Please enter a valid Transaction ID', 'error');
+        return;
+      }
     }
 
     setIsSubmittingUpgrade(true);
     try {
-      const baseAmount = planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
-      let finalAmount = baseAmount;
-      let discountAmount = 0;
-      if (appliedPromo) {
-        const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === appliedPromo.code.toUpperCase());
-        const evalRes = evaluatePromoCode(found, baseAmount);
-        if (evalRes.valid) {
-          discountAmount = evalRes.discountAmount;
-          finalAmount = evalRes.finalPrice;
-        }
-      }
-
       await submitTrxUpgradeRequest(
         auth.currentUser.uid,
         auth.currentUser.email!,
         auth.currentUser.displayName || undefined,
         {
           method: upgradeMethod,
-          senderPhone: phone || 'N/A',
-          trxId: finalAmount === 0 ? 'FREE_SCHOLARSHIP' : tid,
+          senderPhone: finalAmount === 0 ? (phone || 'SCHOLARSHIP') : phone,
+          trxId: finalAmount === 0 ? (tid || 'FREE_SCHOLARSHIP') : tid,
           amount: baseAmount,
           planTerm,
           billingCycle: planTerm,
@@ -362,18 +381,6 @@ export const SettingsView: React.FC = () => {
     }
     setIsSubmittingUpgrade(false);
   };
-
-  const getSubtotal = () => planTerm === 'monthly' ? (pricingConfig?.monthlyPriceBdt || 99) : (pricingConfig?.yearlyPriceBdt || 999);
-
-  const getDiscount = () => {
-    if (!appliedPromo) return 0;
-    const base = getSubtotal();
-    const found = pricingConfig?.promoCodes?.find(p => p.code.toUpperCase() === appliedPromo.code.toUpperCase());
-    const res = evaluatePromoCode(found, base);
-    return res.valid ? res.discountAmount : 0;
-  };
-
-  const getTotal = () => Math.max(0, getSubtotal() - getDiscount());
 
   const handleApplyPromo = () => {
     setPromoError('');
@@ -509,7 +516,8 @@ export const SettingsView: React.FC = () => {
                     style={{ marginTop: '16px', width: '100%', background: '#25D366', color: '#fff' }}
                     onClick={() => {
                       const msg = `Hi! I just submitted an upgrade request for Tuitrix Pro.\nEmail: ${auth?.currentUser?.email}\nPlan: ${billingState.pendingRequest?.planTerm}\nAmount: ৳${billingState.pendingRequest?.finalAmountBdt || billingState.pendingRequest?.amount}\nTrxID: ${billingState.pendingRequest?.trxId}`;
-                      window.open(`https://wa.me/88${pricingConfig?.bkashNumber}?text=${encodeURIComponent(msg)}`, '_blank');
+                      const targetNumber = formatBdWhatsAppNumber(pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '');
+                      window.open(`https://wa.me/${targetNumber}?text=${encodeURIComponent(msg)}`, '_blank');
                     }}
                   >
                     Need Instant Activation? Send TrxID via WhatsApp 💬
@@ -520,6 +528,22 @@ export const SettingsView: React.FC = () => {
               {!isPro && (!billingState?.pendingRequest || billingState.pendingRequest.status !== 'pending') && (
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                   <h3 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>🚀 Upgrade to Tuitrix Pro</h3>
+
+                  {pricingConfig?.promoText && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        background: 'var(--accent-soft)',
+                        border: '1px solid var(--accent)',
+                        borderRadius: '6px',
+                        marginBottom: '16px',
+                        color: 'var(--accent)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {pricingConfig.promoText}
+                    </div>
+                  )}
 
                   {/* Step A: Plan Toggle */}
                   <div style={{ marginBottom: '24px' }}>
@@ -568,7 +592,7 @@ export const SettingsView: React.FC = () => {
                       )}
                     </div>
                     {promoError && <div style={{ color: 'var(--red)', fontSize: '0.85rem', marginTop: '4px' }}>{promoError}</div>}
-                    {appliedPromo && <div style={{ color: 'var(--green)', fontSize: '0.85rem', marginTop: '4px', fontWeight: 'bold' }}>✓ Code applied! You saved ৳{getDiscount()} ({appliedPromo.discountPercent}% OFF)</div>}
+                    {appliedPromo && activePromoEvaluation?.valid && <div style={{ color: 'var(--green)', fontSize: '0.85rem', marginTop: '4px', fontWeight: 'bold' }}>✓ Code applied! You saved ৳{getDiscount()} ({activePromoEvaluation.discountPercent}% OFF)</div>}
 
                     <div style={{ marginTop: '16px', padding: '12px', border: '1px dashed var(--border)', borderRadius: '4px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -1030,7 +1054,7 @@ export const SettingsView: React.FC = () => {
               📚 Open Help Centre & FAQ
             </button>
             <a
-              href={`https://wa.me/88${(pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '').replace(/\D/g, '')}?text=${encodeURIComponent('Hello Tuitrix Support, I need assistance.')}`}
+              href={`https://wa.me/${formatBdWhatsAppNumber(pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '')}?text=${encodeURIComponent('Hello Tuitrix Support, I need assistance.')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn outline"
@@ -1057,8 +1081,8 @@ export const SettingsView: React.FC = () => {
 
 
         <p className="muted small" style={{ textAlign: 'center', marginTop: '12px' }}>
-          {state.students.length} students · {state.lessons.length} logged classes ·{' '}
-          {state.payments.length} payments · {state.docs.length} saved AI documents
+          {(state.students || []).length} students · {(state.lessons || []).length} logged classes ·{' '}
+          {(state.payments || []).length} payments · {(state.docs || []).length} saved AI documents
         </p>
       </div>
 

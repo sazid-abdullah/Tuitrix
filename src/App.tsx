@@ -33,15 +33,16 @@ const LandingView = lazy(() => import('./views/LandingView').then(m => ({ defaul
 const HelpCenterView = lazy(() => import('./views/HelpCenterView').then(m => ({ default: m.HelpCenterView })));
 const OwnerDashboardView = lazy(() => import('./views/OwnerDashboardView').then(m => ({ default: m.OwnerDashboardView })));
 
-interface ErrorBoundaryProps {
+export interface ErrorBoundaryProps {
   children: ReactNode;
   onReset?: () => void;
+  resetKey?: string;
 }
-interface ErrorBoundaryState {
+export interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
 }
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -51,6 +52,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('View Error Boundary caught error:', error, info);
+  }
+  componentDidUpdate(prevProps: ErrorBoundaryProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
   }
   render() {
     if (this.state.hasError) {
@@ -293,7 +299,7 @@ export const App: React.FC = () => {
       <Navbar currentRoute={route} onNavigate={navigate} onLoginClick={() => setAuthModalOpen(true)} />
 
       <main id="view" tabIndex={-1}>
-        <ErrorBoundary onReset={() => window.location.reload()}>
+        <ErrorBoundary resetKey={`${route}:${routeParam}`} onReset={() => parseHash()}>
           <Suspense fallback={<div className="card" style={{ margin: '40px auto', padding: '32px', textAlign: 'center', color: 'var(--muted)' }}><span className="sync-dot" style={{ display: 'inline-block', marginRight: '8px' }}></span>Loading view...</div>}>
             {runningExam && route !== 'exam' && (
           <div className="notice warn" style={{ marginBottom: '16px' }}>

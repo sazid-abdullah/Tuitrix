@@ -12,6 +12,7 @@ vi.mock('../services/firebase', () => ({
 describe('LandingView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders hero headlines and translates correctly', async () => {

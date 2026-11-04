@@ -161,6 +161,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isMigratingRef = useRef(false);
   const authLoadedRef = useRef(false);
   const isInitialRemoteLoadRef = useRef(false);
+  const debounceTimerRef = useRef<any>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Firestore sync and migration
   useEffect(() => {
@@ -169,6 +172,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     let unsubscribe: () => void = () => {};
     if (auth) { unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
       setUser(user ? { email: user.email } : null);
       if (unsubscribeBilling) unsubscribeBilling();
       setBillingState(null);
@@ -339,15 +346,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []); // state shouldn't be here since we upload dataToUpload
 
-  // Persist state changes (debounced by 250ms)
-  const debounceTimerRef = useRef<any>(null);
+  // Flush pending debounced state to localStorage immediately on tab close or page hide
+  useEffect(() => {
+    const handleFlush = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+        try {
+          localStorage.setItem(STORE_KEY, JSON.stringify(stateRef.current));
+        } catch (e) {
+          console.error('Failed to flush state to localStorage on page exit', e);
+        }
+      }
+    };
 
+    window.addEventListener('beforeunload', handleFlush);
+    window.addEventListener('pagehide', handleFlush);
+    return () => {
+      window.removeEventListener('beforeunload', handleFlush);
+      window.removeEventListener('pagehide', handleFlush);
+    };
+  }, [state]);
+
+  // Persist state changes (debounced by 250ms)
   useEffect(() => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
     debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
       try {
         localStorage.setItem(STORE_KEY, JSON.stringify(state));
 

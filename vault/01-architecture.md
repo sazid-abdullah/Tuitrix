@@ -43,7 +43,7 @@ See [[vault/00-Index.md|Index]] and [[vault/02-changelog.md|Changelog]].
   - `settings`: `Settings` (theme, currency, tutorName, lastBackup)
   - `profile`: `TutorProfile` (credentials, brandTitle, showPrintHeader, showPrintWatermark)
   - `ai`: `AIConfig` (provider, keys, models)
-- **Local Storage Key**: `'tuitrix_data_v1'`
+- **Local Storage Keys**: Exact production key is `'tuitrix_data'` (along with `'tuitrix_theme'`, `'tuitrix_pricing'`, and `'tuitrix_entered_app'`).
 - **Sync Mechanism**:
   - Offline-first: Reads and writes to `localStorage` debounced at 250ms.
   - Cloud Sync: If authenticated, synchronizes with `users/{uid}/data/appState` in Firestore.

@@ -190,6 +190,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 return `https://wa.me/${d}?text=${encodeURIComponent(text || '')}`;
               };
 
+              const contactPhone = s.phone || s.guardianPhone;
               let dueText = '';
               if (contracts.length > 0 && bal > 0.005) {
                 dueText = `Hello! A friendly reminder that the tuition fee of ${money(bal)} for ${s.name} is due. The billing cycle is complete.\nThank you!`;
@@ -241,10 +242,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     >
                       ✨ AI Quiz / Notes
                     </button>
-                    {bal > 0.005 && s.phone && (
+                    {bal > 0.005 && contactPhone && (
                       <a
                         className="btn xs primary"
-                        href={phoneLink(s.phone, dueText)}
+                        href={phoneLink(contactPhone, dueText)}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}

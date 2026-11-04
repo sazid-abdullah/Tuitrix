@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Batch, Student } from '../types';
 import { useStore } from '../store/context';
+import { isProUser, canAddBatch, FREE_TIER_MAX_BATCHES } from '../utils/tierLimits';
 
 interface BatchModalProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
   batch,
   onClose,
 }) => {
-  const { state, saveBatch, deleteBatch, toast } = useStore();
+  const { state, billingState, user, saveBatch, deleteBatch, toast } = useStore();
   const isNew = !batch;
 
   const [name, setName] = useState('');
@@ -66,6 +67,15 @@ export const BatchModal: React.FC<BatchModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    if (isNew) {
+      const isPro = isProUser(billingState, user?.email);
+      const activeBatchesCount = (state.batches || []).filter(b => b.active !== false).length;
+      if (!canAddBatch(activeBatchesCount, isPro)) {
+        toast(`Free tier is limited to ${FREE_TIER_MAX_BATCHES} active batches. Upgrade to Pro in Settings for unlimited batches.`, 'error');
+        return;
+      }
+    }
 
     saveBatch({
       id: batch?.id,

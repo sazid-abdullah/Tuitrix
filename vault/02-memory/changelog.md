@@ -6,6 +6,19 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
+## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
+- Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.
+- Added `resetKey` and `componentDidUpdate` auto-reset to `ErrorBoundary` on route changes, replacing full window reload with clean `parseHash()` view re-mounting.
+- Fixed `fetchPlatformTelemetry` to only tally approved requests toward revenue and discounts while reconciling redemption counts across non-rejected requests, and guarded pricing updates in `submitTrxUpgradeRequest` to owner-only.
+- Added reactive `isAuthorizedOwner` route guard with clean access-denied view in `OwnerDashboardView` and added dynamic `freeStudentLimit` editor in Pricing & Numbers.
+- Fixed 100% scholarship checkout in `SettingsView` by skipping phone/TrxID validation on `finalAmount === 0`, rendered dynamic `promoText` campaign banner in `#upgrade-section`, and normalized BD WhatsApp numbers.
+- Added `guardianPhone` fallback in `StudentsView` for the "Send Due Card" WhatsApp reminder action when a student's personal phone is omitted.
+- Enforced dynamic free student limit (`getFreeStudentLimit()`) across `StudentModal` and `BulkStudentModal` with local pricing config caching in `fetchPricingConfig`.
+- Updated `BulkStudentModal` to link imported students to target batches via `batch.studentIds` and normalized owner Pro checks via `isOwnerEmail`.
+- Enforced Free tier active batch cap in `BatchModal` via `canAddBatch`, normalized owner Pro detection in `Navbar`, and added Bangla fallback with clickable language toggle in `HelpCenterView`.
+- Made `LandingView` free student limits dynamic, sorted and backed up FAQs, and linked Help Centre & Pro upgrade CTAs cleanly to `#/help` and `#/settings`.
+- Converted Firebase Messaging to dynamic import in `notifications.ts`, guarded Analytics initialization in `firebase.ts` against test/headless environments, and set `chunkSizeWarningLimit: 700` in `vite.config.ts` for zero-warning production builds.
+
 ## [2026-11-02] — Stability, Crash Hardening, Performance & Second Brain Vault
 
 ### Fixed

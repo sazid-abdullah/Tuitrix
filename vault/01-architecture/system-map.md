@@ -41,9 +41,10 @@ tags: [architecture, routes, store, firebase]
   - `settings`: `Settings` (theme, currency, tutorName, lastBackup)
   - `profile`: `TutorProfile` (credentials, brandTitle, showPrintHeader, showPrintWatermark)
   - `ai`: `AIConfig` (provider, keys, models)
-- **Local Storage Key**: `'tuitrix_data_v1'`
+- **Local Storage Keys**: Exact production key is `'tuitrix_data'` (along with `'tuitrix_theme'`, `'tuitrix_pricing'`, and `'tuitrix_entered_app'`).
 - **Sync Mechanism**:
   - Offline-first: Reads and writes to `localStorage` debounced at 250ms.
+  - Debounce Flushes: Cleared on auth change/logout to prevent state bleed, and flushed immediately on `beforeunload` / `pagehide` to prevent data loss on tab close.
   - Cloud Sync: If authenticated, synchronizes with `users/{uid}/data/appState` in Firestore.
   - Multi-tab Sync: `storage` event listener keeps browser tabs synchronized in real time.
 
