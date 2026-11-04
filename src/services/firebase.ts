@@ -47,6 +47,25 @@ if (app && typeof window !== 'undefined' && 'indexedDB' in window && import.meta
   }
 }
 
+export function stripUndefinedDeep<T>(val: T): T {
+  if (val === null || val === undefined || typeof val !== 'object') {
+    return val;
+  }
+  if (val instanceof Date) {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.map(item => stripUndefinedDeep(item)) as unknown as T;
+  }
+  const result: any = {};
+  for (const [key, value] of Object.entries(val)) {
+    if (value !== undefined) {
+      result[key] = stripUndefinedDeep(value);
+    }
+  }
+  return result as T;
+}
+
 export const evaluatePromoCode = (
   promo: PromoCode | null | undefined,
   basePrice: number
@@ -130,7 +149,7 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
   const reqId = `req_${Date.now()}`;
   const now = new Date().toISOString();
 
-  const request: TrxUpgradeRequest = {
+  const request: TrxUpgradeRequest = stripUndefinedDeep({
     id: reqId,
     uid,
     userEmail: email,
@@ -146,9 +165,9 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
     finalAmountBdt: payload.finalAmountBdt,
     status: 'pending',
     createdAt: now,
-  };
+  });
 
-  const pendingInfo = {
+  const pendingInfo = stripUndefinedDeep({
     method: payload.method,
     trxId: payload.trxId,
     senderPhone: payload.senderPhone,
@@ -160,7 +179,7 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
     discountAmountBdt: payload.discountAmountBdt,
     finalAmountBdt: payload.finalAmountBdt,
     status: 'pending' as const,
-  };
+  });
 
   // Increment usedCount for the applied promo code in localStorage and Firestore
   if (payload.promoCodeUsed) {
@@ -215,7 +234,7 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
   }
 
   // Clean undefined values before saving to Firestore
-  const cleanRequest = Object.fromEntries(Object.entries(request).filter(([_, v]) => v !== undefined));
+  const cleanRequest = stripUndefinedDeep(request);
 
   // Save to upgrade_requests collection
   await setDoc(doc(db, 'upgrade_requests', reqId), cleanRequest);
@@ -224,10 +243,11 @@ export const submitTrxUpgradeRequest = async (uid: string, email: string, name: 
   const billingRef = doc(db, `users/${uid}/data/billing`);
   const billingDoc = await getDoc(billingRef);
 
+  const cleanBilling = stripUndefinedDeep({ pendingRequest: pendingInfo, updatedAt: Date.now() });
   if (billingDoc.exists()) {
-    await updateDoc(billingRef, { pendingRequest: pendingInfo, updatedAt: Date.now() });
+    await updateDoc(billingRef, cleanBilling);
   } else {
-    await setDoc(billingRef, { pendingRequest: pendingInfo, updatedAt: Date.now() }, { merge: true });
+    await setDoc(billingRef, cleanBilling, { merge: true });
   }
 
   return request;
@@ -435,7 +455,7 @@ export const reviewUpgradeRequest = async (requestId: string, targetUid: string,
     ];
   }
 
-  batch.set(billingRef, updateData, { merge: true });
+  batch.set(billingRef, stripUndefinedDeep(updateData), { merge: true });
   await batch.commit();
 };
 
@@ -570,7 +590,7 @@ export const fetchPricingConfig = async (): Promise<PricingConfig> => {
 };
 
 export const updatePricingConfig = async (config: PricingConfig): Promise<void> => {
-  const data = { ...config, updatedAt: Date.now() };
+  const data = stripUndefinedDeep({ ...config, updatedAt: Date.now() });
   localStorage.setItem('tuitrix_pricing', JSON.stringify(data));
   if (!db) {
     return;
@@ -614,5 +634,66 @@ export const deleteTutorAccountAndData = async (uid: string): Promise<void> => {
     throw e;
   }
 };
+
+export async function publishSharedExamResult(
+  attempt: any,
+  exam: any,
+  meta: { studentFirstName?: string; tutorName?: string } = {}
+): Promise<string> {
+  const payload = stripUndefinedDeep({
+    id: attempt.id,
+    attempt,
+    exam,
+    studentFirstName: (meta.studentFirstName || '').split(' ')[0] || 'Student',
+    tutorName: meta.tutorName || 'Tutor',
+    updatedAt: Date.now(),
+  });
+
+  try {
+    localStorage.setItem(`shared_result_${attempt.id}`, JSON.stringify(payload));
+  } catch (e) {
+    console.warn('Failed to cache shared result in localStorage:', e);
+  }
+
+  if (db && auth?.currentUser) {
+    try {
+      await setDoc(doc(db, 'shared_results', attempt.id), payload);
+    } catch (e) {
+      console.error('Failed to publish shared exam result to Firestore:', e);
+      throw e;
+    }
+  }
+
+  return attempt.id;
+}
+
+export async function fetchSharedExamResult(resultId: string): Promise<any | null> {
+  if (!resultId) return null;
+
+  try {
+    const local = localStorage.getItem(`shared_result_${resultId}`);
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (parsed) return parsed;
+    }
+  } catch {}
+
+  if (db) {
+    try {
+      const snap = await getDoc(doc(db, 'shared_results', resultId));
+      if (snap.exists()) {
+        const data = snap.data();
+        try {
+          localStorage.setItem(`shared_result_${resultId}`, JSON.stringify(data));
+        } catch {}
+        return data;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch shared exam result from Firestore:', e);
+    }
+  }
+
+  return null;
+}
 
 export { app, auth, db, analytics, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail };

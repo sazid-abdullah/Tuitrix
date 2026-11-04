@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as firebaseMod from '../services/firebase';
-import { submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, evaluatePromoCode, fetchPlatformTelemetry } from '../services/firebase';
+import { submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, evaluatePromoCode, fetchPlatformTelemetry, publishSharedExamResult, fetchSharedExamResult } from '../services/firebase';
 import { PromoCode } from '../types';
 
 vi.mock('firebase/firestore', () => ({
@@ -221,6 +221,55 @@ describe('trxUpgrade functionality', () => {
       expect(telem.pendingCount).toBeGreaterThanOrEqual(1);
       expect(telem.promoUsageMap['PROMO10']).toBeDefined();
       expect(telem.promoUsageMap['PROMO10'].count).toBe(1);
+    });
+  });
+
+  describe('publishSharedExamResult & fetchSharedExamResult', () => {
+    it('publishes shared exam result, strips undefined fields, and parses first name', async () => {
+      const mockAttempt = {
+        id: 'att_share_test',
+        examId: 'ex_share_test',
+        title: 'Physics Chapter 1 Quiz',
+        answers: { q1: 2 },
+        marks: { q1: 1 },
+        aiMarks: {},
+        undefinedField: undefined,
+      };
+
+      const mockExam = {
+        id: 'ex_share_test',
+        title: 'Physics Exam',
+        duration: 30,
+        questions: [{ id: 'q1', n: 1, type: 'mcq', text: '1+1?', options: ['1', '2'], answer: 1 }],
+      };
+
+      const id = await publishSharedExamResult(mockAttempt, mockExam, {
+        studentFirstName: 'Sadia Jahan',
+        tutorName: 'Master Sazid',
+      });
+
+      expect(id).toBe('att_share_test');
+
+      const cached = await fetchSharedExamResult('att_share_test');
+      expect(cached).not.toBeNull();
+      expect(cached.id).toBe('att_share_test');
+      expect(cached.studentFirstName).toBe('Sadia'); // extracts first name
+      expect(cached.tutorName).toBe('Master Sazid');
+      expect(cached.attempt.id).toBe('att_share_test');
+      expect(cached.attempt.undefinedField).toBeUndefined();
+      expect('undefinedField' in cached.attempt).toBe(false);
+      expect(cached.exam.title).toBe('Physics Exam');
+    });
+
+    it('defaults to "Student" and "Tutor" when meta is omitted', async () => {
+      const mockAttempt = { id: 'att_no_meta', title: 'Test Quiz' };
+      const mockExam = { id: 'ex_no_meta', title: 'Exam' };
+
+      await publishSharedExamResult(mockAttempt, mockExam);
+
+      const cached = await fetchSharedExamResult('att_no_meta');
+      expect(cached.studentFirstName).toBe('Student');
+      expect(cached.tutorName).toBe('Tutor');
     });
   });
 });

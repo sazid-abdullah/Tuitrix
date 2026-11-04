@@ -235,16 +235,19 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
     const isPercent = promoForm.discountType === 'percent';
     const computedPercent = isPercent ? Math.min(100, Math.max(0, val)) : Math.min(100, Math.max(0, Math.round((val / (pricingConfig.monthlyPriceBdt || 99)) * 100)));
 
+    const cleanDesc = promoForm.description?.trim();
+    const liveUsedCount = Math.max(promoForm.usedCount || 0, telemetry?.promoUsageMap[cleanCode]?.count || 0);
+
     const item: PromoCode = {
       code: cleanCode,
       discountType: promoForm.discountType || 'percent',
       discountValue: val,
       discountPercent: computedPercent,
-      maxUses: Number(promoForm.maxUses) > 0 ? Number(promoForm.maxUses) : undefined,
-      usedCount: promoForm.usedCount || 0,
-      expiresAt: promoForm.expiresAt ? promoForm.expiresAt : undefined,
       active: promoForm.active,
-      description: promoForm.description?.trim(),
+      usedCount: liveUsedCount,
+      ...(Number(promoForm.maxUses) > 0 ? { maxUses: Number(promoForm.maxUses) } : {}),
+      ...(promoForm.expiresAt ? { expiresAt: promoForm.expiresAt } : {}),
+      ...(cleanDesc ? { description: cleanDesc } : {}),
     };
 
     let updatedPromos = [...(pricingConfig.promoCodes || [])];
@@ -711,7 +714,7 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                 Monthly Pro Price (৳) *
                 <input
                   type="number"
-                  value={pricingForm.monthlyPriceBdt}
+                  value={pricingForm.monthlyPriceBdt === 0 ? '' : String(Number(pricingForm.monthlyPriceBdt))}
                   onChange={e => setPricingForm({ ...pricingForm, monthlyPriceBdt: Number(e.target.value) })}
                   required
                 />
@@ -720,7 +723,7 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                 Yearly Pro Price (৳) *
                 <input
                   type="number"
-                  value={pricingForm.yearlyPriceBdt}
+                  value={pricingForm.yearlyPriceBdt === 0 ? '' : String(Number(pricingForm.yearlyPriceBdt))}
                   onChange={e => setPricingForm({ ...pricingForm, yearlyPriceBdt: Number(e.target.value) })}
                   required
                 />
@@ -730,7 +733,7 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                 <input
                   type="number"
                   min={1}
-                  value={pricingForm.freeStudentLimit ?? 5}
+                  value={pricingForm.freeStudentLimit === 0 ? '' : String(Number(pricingForm.freeStudentLimit ?? 5))}
                   onChange={e => setPricingForm({ ...pricingForm, freeStudentLimit: Number(e.target.value) })}
                   required
                 />
@@ -857,7 +860,8 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                 </thead>
                 <tbody>
                   {(pricingConfig.promoCodes || []).map((promo, idx) => {
-                    const isExhausted = promo.maxUses && promo.maxUses > 0 && (promo.usedCount || 0) >= promo.maxUses;
+                    const liveUsedCount = Math.max(promo.usedCount || 0, telemetry?.promoUsageMap[promo.code.toUpperCase()]?.count || 0);
+                    const isExhausted = promo.maxUses && promo.maxUses > 0 && liveUsedCount >= promo.maxUses;
                     return (
                       <tr key={promo.code}>
                         <td>
@@ -869,7 +873,7 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                         </td>
                         <td>{promo.maxUses && promo.maxUses > 0 ? `${promo.maxUses} uses` : 'Unlimited'}</td>
                         <td>
-                          <strong>{promo.usedCount || 0}</strong>
+                          <strong>{liveUsedCount}</strong>
                           {isExhausted && <span className="badge red" style={{ marginLeft: '6px' }}>Cap Reached</span>}
                         </td>
                         <td>{promo.expiresAt || 'Never'}</td>

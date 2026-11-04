@@ -36,7 +36,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const c = cid && getContract(cid);
     if (!c) return '';
     const st = contractStatus(c, state.lessons, state.payments);
-    return st.balance > 0 ? Math.round(st.balance * 100) / 100 : c.fee;
+    return st.balance !== 0 ? Math.round(Math.abs(st.balance) * 100) / 100 : c.fee;
   };
 
   useEffect(() => {

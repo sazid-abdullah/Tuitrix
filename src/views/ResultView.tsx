@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/context';
 import { fmtDate, fmtN, uid, todayISO } from '../utils/date';
 import { renderMarkdown, callAI, MARK_SYSTEM, markPrompt, parseAiJson } from '../services/ai';
+import { publishSharedExamResult, fetchSharedExamResult } from '../services/firebase';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { Question } from '../types';
+import { Question, Exam } from '../types';
 
 interface ResultViewProps {
   attemptId: string;
@@ -12,8 +13,62 @@ interface ResultViewProps {
 
 export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate }) => {
   const { state, studentName, saveAttempt, deleteAttempt, saveExam, addExamScore, toast } = useStore();
-  const attempt = state.attempts.find(a => a.id === attemptId);
-  const exam = attempt ? state.exams.find(e => e.id === attempt.examId) : null;
+
+  const localAttempt = state.attempts.find(a => a.id === attemptId);
+  const [sharedData, setSharedData] = useState<{
+    id?: string;
+    attempt: any;
+    exam: any;
+    studentFirstName?: string;
+    tutorName?: string;
+  } | null>(null);
+  const [loadingShared, setLoadingShared] = useState<boolean>(!localAttempt);
+  const [sharing, setSharing] = useState(false);
+
+  useEffect(() => {
+    if (localAttempt) {
+      setLoadingShared(false);
+      return;
+    }
+    let isMounted = true;
+    setLoadingShared(true);
+    fetchSharedExamResult(attemptId)
+      .then(data => {
+        if (isMounted) {
+          if (data) {
+            setSharedData(data);
+          }
+          setLoadingShared(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setLoadingShared(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [attemptId, localAttempt]);
+
+  const attempt = localAttempt || sharedData?.attempt || null;
+  const isReadOnly = !state.attempts.some(a => a.id === attemptId);
+
+  const resolvedExam = useMemo<Exam | null>(() => {
+    if (!attempt) return null;
+    const found = state.exams.find(e => e.id === attempt.examId);
+    if (found) return found;
+    if (sharedData?.exam) return sharedData.exam as Exam;
+    // Synthesize fallback Exam object from attempt
+    return {
+      id: attempt.examId || attempt.id,
+      title: attempt.title || 'Exam',
+      duration: 60,
+      instructions: '',
+      cqChoose: 0,
+      questions: ((attempt as any).questions || []) as Question[],
+    };
+  }, [attempt, state.exams, sharedData]);
+
+  const exam = resolvedExam;
 
   const [marksState, setMarksState] = useState<Record<string, any>>(attempt?.marks || {});
   const [aiMarks, setAiMarks] = useState<Record<string, { marks: number; reason: string }>>(
@@ -22,6 +77,22 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
   const [aiBusy, setAiBusy] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>(attempt?.studentId || '');
+
+  useEffect(() => {
+    if (attempt) {
+      setMarksState(attempt.marks || {});
+      setAiMarks(attempt.aiMarks || {});
+      setSelectedStudentId(attempt.studentId || '');
+    }
+  }, [attempt?.id]);
+
+  if (loadingShared) {
+    return (
+      <div className="card empty" style={{ textAlign: 'center', padding: '40px' }}>
+        <span className="spinner" style={{ marginRight: '8px' }} /> Loading result…
+      </div>
+    );
+  }
 
   if (!attempt || !exam) {
     return (
@@ -302,20 +373,50 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
     toast('MCQ answer key updated', 'success');
   };
 
+  const handleShareResult = async () => {
+    if (!attempt || !resolvedExam) return;
+    setSharing(true);
+    try {
+      await publishSharedExamResult(attempt, resolvedExam, {
+        studentFirstName: targetStudent?.name,
+        tutorName: state.settings.tutorName,
+      });
+      const shareUrl = `${window.location.origin}${window.location.pathname}#/result/${attempt.id}`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      }
+      toast('Result link copied to clipboard!', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to share result', 'error');
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const L = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)'];
 
   return (
     <div>
       <div className="page-head">
         <div>
-          <h1>{attempt.title}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <h1>{attempt.title}</h1>
+            {isReadOnly && <span className="badge">Shared Result (Read-Only)</span>}
+          </div>
           <div className="sub">
-            {activeStudentId ? `${studentName(activeStudentId)} · ` : ''}
-            {fmtDate(new Date(attempt.startedAt).toISOString().slice(0, 10))}
+            {sharedData?.studentFirstName
+              ? `${sharedData.studentFirstName} · `
+              : activeStudentId
+              ? `${studentName(activeStudentId)} · `
+              : ''}
+            {attempt.startedAt
+              ? fmtDate(new Date(attempt.startedAt).toISOString().slice(0, 10))
+              : ''}
+            {sharedData?.tutorName ? ` · Tutor: ${sharedData.tutorName}` : ''}
           </div>
         </div>
         <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {!attempt.studentId && (
+          {!isReadOnly && !attempt.studentId && (
             <select
               value={selectedStudentId}
               onChange={e => setSelectedStudentId(e.target.value)}
@@ -329,21 +430,36 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
               ))}
             </select>
           )}
-          <button
-            type="button"
-            className={`btn ${isScoreLogged ? 'secondary' : 'primary'}`}
-            onClick={handleLogScore}
-            disabled={!activeStudentId || isScoreLogged}
-            title={isScoreLogged ? 'Score already logged to student profile' : 'Log score to student profile'}
-          >
-            {isScoreLogged ? '✓ Score Logged to Profile' : '📈 Log Score to Student Profile'}
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              className={`btn ${isScoreLogged ? 'secondary' : 'primary'}`}
+              onClick={handleLogScore}
+              disabled={!activeStudentId || isScoreLogged}
+              title={isScoreLogged ? 'Score already logged to student profile' : 'Log score to student profile'}
+            >
+              {isScoreLogged ? '✓ Score Logged to Profile' : '📈 Log Score to Student Profile'}
+            </button>
+          )}
+          {!isReadOnly && (
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={handleShareResult}
+              disabled={sharing}
+              title="Publish and copy a public link for parents/students"
+            >
+              {sharing ? 'Generating link…' : '🔗 Share Result Link'}
+            </button>
+          )}
           <button type="button" className="btn ghost" onClick={() => window.print()}>
             🖨️ Print
           </button>
-          <button type="button" className="btn ghost" onClick={() => setDeleteConfirmOpen(true)}>
-            Delete result
-          </button>
+          {!isReadOnly && (
+            <button type="button" className="btn ghost" onClick={() => setDeleteConfirmOpen(true)}>
+              Delete result
+            </button>
+          )}
         </div>
       </div>
 
@@ -378,9 +494,11 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
       {/* Written questions marking */}
       {wqs.length > 0 && (
         <div className="section">
-          <h2>Mark written answers</h2>
+          <h2>{isReadOnly ? 'Written Question Review' : 'Mark written answers'}</h2>
           <p className="muted small" style={{ marginBottom: '12px' }}>
-            Review student responses and assign marks. You can also ask AI for scoring recommendations.
+            {isReadOnly
+              ? 'Student responses and evaluated marks.'
+              : 'Review student responses and assign marks. You can also ask AI for scoring recommendations.'}
           </p>
 
           <form onSubmit={handleSaveMarks}>
@@ -423,23 +541,27 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                         <div className="mark-row">
                           <label className="mark-in">
                             Marks{' '}
-                            <input
-                              type="number"
-                              min="0"
-                              max={p.marks}
-                              step="0.5"
-                              value={marksState[key] ?? ''}
-                              onChange={e => {
-                                const v = e.target.value;
-                                setMarksState({
-                                  ...marksState,
-                                  [key]: v === '' ? '' : clampMark(v, p.marks),
-                                });
-                              }}
-                            />{' '}
+                            {isReadOnly ? (
+                              <b>{marksState[key] !== '' && marksState[key] !== undefined ? marksState[key] : '—'}</b>
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                max={p.marks}
+                                step="0.5"
+                                value={marksState[key] ?? ''}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  setMarksState({
+                                    ...marksState,
+                                    [key]: v === '' ? '' : clampMark(v, p.marks),
+                                  });
+                                }}
+                              />
+                            )}{' '}
                             / {p.marks}
                           </label>
-                          {sug && (
+                          {!isReadOnly && sug && (
                             <span className="help">
                               AI suggests <b>{sug.marks}</b>: {sug.reason}
                             </span>
@@ -468,23 +590,27 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                     <div className="mark-row">
                       <label className="mark-in">
                         Marks{' '}
-                        <input
-                          type="number"
-                          min="0"
-                          max={q.marks}
-                          step="0.5"
-                          value={marksState[q.id] ?? ''}
-                          onChange={e => {
-                            const v = e.target.value;
-                            setMarksState({
-                              ...marksState,
-                              [q.id]: v === '' ? '' : clampMark(v, q.marks),
-                            });
-                          }}
-                        />{' '}
+                        {isReadOnly ? (
+                          <b>{marksState[q.id] !== '' && marksState[q.id] !== undefined ? marksState[q.id] : '—'}</b>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            max={q.marks}
+                            step="0.5"
+                            value={marksState[q.id] ?? ''}
+                            onChange={e => {
+                              const v = e.target.value;
+                              setMarksState({
+                                ...marksState,
+                                [q.id]: v === '' ? '' : clampMark(v, q.marks),
+                              });
+                            }}
+                          />
+                        )}{' '}
                         / {q.marks}
                       </label>
-                      {aiMarks[`${q.id}:0`] && (
+                      {!isReadOnly && aiMarks[`${q.id}:0`] && (
                         <span className="help">
                           AI suggests <b>{aiMarks[`${q.id}:0`].marks}</b>:{' '}
                           {aiMarks[`${q.id}:0`].reason}
@@ -496,24 +622,26 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
               </div>
             ))}
 
-            <div className="form-actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={handleAIMark}
-                disabled={aiBusy}
-              >
-                {aiBusy ? <span className="spinner" /> : 'Suggest marks with AI'}
-              </button>
-              {Object.keys(aiMarks).length > 0 && (
-                <button type="button" className="btn" onClick={handleUseAIMarks}>
-                  Use AI suggestions
+            {!isReadOnly && (
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleAIMark}
+                  disabled={aiBusy}
+                >
+                  {aiBusy ? <span className="spinner" /> : 'Suggest marks with AI'}
                 </button>
-              )}
-              <button type="submit" className="btn primary">
-                Save marks
-              </button>
-            </div>
+                {Object.keys(aiMarks).length > 0 && (
+                  <button type="button" className="btn" onClick={handleUseAIMarks}>
+                    Use AI suggestions
+                  </button>
+                )}
+                <button type="submit" className="btn primary">
+                  Save marks
+                </button>
+              </div>
+            )}
           </form>
         </div>
       )}
@@ -546,20 +674,24 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                       </div>
                     </div>
                     {q.answer == null ? (
-                      <select
-                        onChange={e =>
-                          e.target.value !== '' &&
-                          handleSetMCQAnswer(q.id, Number(e.target.value))
-                        }
-                        defaultValue=""
-                      >
-                        <option value="">Set key…</option>
-                        {q.options.map((opt, i) => (
-                          <option key={i} value={i}>
-                            {L[i]} {opt}
-                          </option>
-                        ))}
-                      </select>
+                      isReadOnly ? (
+                        <span className="badge">No key</span>
+                      ) : (
+                        <select
+                          onChange={e =>
+                            e.target.value !== '' &&
+                            handleSetMCQAnswer(q.id, Number(e.target.value))
+                          }
+                          defaultValue=""
+                        >
+                          <option value="">Set key…</option>
+                          {q.options.map((opt, i) => (
+                            <option key={i} value={i}>
+                              {L[i]} {opt}
+                            </option>
+                          ))}
+                        </select>
+                      )
                     ) : isCorrect ? (
                       <span className="badge green">✓</span>
                     ) : (
@@ -573,19 +705,21 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
         </div>
       )}
 
-      <ConfirmModal
-        isOpen={deleteConfirmOpen}
-        title="Delete this result?"
-        message="The student's recorded score and answers will be permanently deleted."
-        confirmLabel="Delete"
-        isDanger
-        onConfirm={() => {
-          deleteAttempt(attempt.id);
-          toast('Result deleted', 'info');
-          onNavigate('ai', 'tool=results');
-        }}
-        onClose={() => setDeleteConfirmOpen(false)}
-      />
+      {!isReadOnly && (
+        <ConfirmModal
+          isOpen={deleteConfirmOpen}
+          title="Delete this result?"
+          message="The student's recorded score and answers will be permanently deleted."
+          confirmLabel="Delete"
+          isDanger
+          onConfirm={() => {
+            deleteAttempt(attempt.id);
+            toast('Result deleted', 'info');
+            onNavigate('ai', 'tool=results');
+          }}
+          onClose={() => setDeleteConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 };

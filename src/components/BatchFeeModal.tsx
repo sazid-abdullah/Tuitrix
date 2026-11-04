@@ -211,6 +211,10 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
                   hasLastClass
                 });
 
+                const phone = d.student!.guardianPhone || d.student!.phone || '';
+                let cleanPhone = phone.replace(/[^0-9+]/g, '');
+                if (cleanPhone.length === 11 && cleanPhone.startsWith('01')) cleanPhone = '88' + cleanPhone;
+
                 return (
                   <tr key={sid} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px' }}>
@@ -233,7 +237,7 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
                     <td style={{ padding: '8px', textAlign: 'center' }}>
                       {hasDue ? (
                         <a
-                           href={`https://wa.me/?text=${encodeURIComponent(waMessageEn)}`}
+                           href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(waMessageEn)}`}
                            target="_blank"
                            rel="noopener noreferrer"
                            title="Send reminder on WhatsApp"

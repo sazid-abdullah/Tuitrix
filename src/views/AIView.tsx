@@ -21,7 +21,7 @@ import {
 import { fmtDate, uid, todayISO } from '../utils/date';
 import { SavedDoc, SavedAiResource } from '../types';
 import { isProUser, FREE_TIER_MAX_SAVED_RESOURCES, getDailyAiQuotaState, canSaveAiResource } from '../utils/tierLimits';
-import { isOwnerEmail } from '../utils/auth';
+import { isOwnerEmail, sanitizePlaceholder } from '../utils/auth';
 import { RewardedAdModal } from '../components/RewardedAdModal';
 
 interface AIViewProps {
@@ -97,7 +97,7 @@ export const AIView: React.FC<AIViewProps> = ({
     'Short answer',
   ]);
   const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
-  const [checkWithAI, setCheckWithAI] = useState(true);
+  const [checkWithAI, setCheckWithAI] = useState(false);
   const [worksheetCount, setWorksheetCount] = useState(15);
   const [notes, setNotes] = useState('');
 
@@ -388,7 +388,7 @@ export const AIView: React.FC<AIViewProps> = ({
     try {
       const checkText = await callAI(
         CHECK_SYSTEM,
-        checkPrompt(r.tool, formParams, r.content),
+        checkPrompt(r.tool, formParams, (r.content || '').slice(0, 24000)),
         state,
         { temperature: 0.2, onFallback: (msg) => toast(msg, 'info') }
       );
@@ -525,8 +525,8 @@ export const AIView: React.FC<AIViewProps> = ({
     let footerHtml = '';
 
     const tutorNameStr = state.settings.tutorName || '';
-    const brandTitleStr = state.profile?.brandTitle || 'EXAM / LECTURE SHEET';
-    const credentialsStr = state.profile?.credentials || '';
+    const brandTitleStr = sanitizePlaceholder(state.profile?.brandTitle) || 'EXAM / LECTURE SHEET';
+    const credentialsStr = sanitizePlaceholder(state.profile?.credentials);
 
     if (localShowHeader) {
       const parts = [tutorNameStr, credentialsStr].filter(Boolean);
@@ -549,7 +549,7 @@ export const AIView: React.FC<AIViewProps> = ({
     }
 
     if (localShowWatermark) {
-      const wmText = state.profile?.brandTitle || state.settings.tutorName || 'Tuitrix';
+      const wmText = sanitizePlaceholder(state.profile?.brandTitle) || state.settings.tutorName || 'Tuitrix';
       watermarkHtml = `<div class="watermark">${wmText}</div>`;
       footerHtml = `<div class="print-footer">Prepared by ${tutorNameStr || 'Tutor'} &bull; Powered by Tuitrix</div>`;
     }
@@ -581,7 +581,7 @@ export const AIView: React.FC<AIViewProps> = ({
     }, 250);
   };
 
-  const attemptsList = state.attempts
+  const attemptsList = (state.attempts || [])
     .filter(a => !docsFilterStudent || a.studentId === docsFilterStudent)
     .sort((a, b) => b.startedAt - a.startedAt);
 
@@ -1277,28 +1277,43 @@ export const AIView: React.FC<AIViewProps> = ({
                           Start exam
                         </button>
                       )}
+                      {!result.check && result.tool !== 'plan' && (
+                        <button
+                          className="btn sm"
+                          disabled={!!busy}
+                          onClick={() => runCheck(result, {})}
+                        >
+                          Verify accuracy with AI
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {result.check && (
-                    <div
-                      className={`notice ${result.check.ok ? 'green' : 'warn'}`}
-                      style={{ marginTop: '10px' }}
-                    >
-                      <b>
-                        {result.check.ok
-                          ? 'AI check: no mistakes detected.'
-                          : 'AI check found possible items to review:'}
-                      </b>
-                      {!result.check.ok && (
-                        <div
-                          className="doc"
-                          dangerouslySetInnerHTML={{
-                            __html: renderMarkdown(result.check.report),
-                          }}
-                        />
-                      )}
-                    </div>
+                    result.check.error ? (
+                      <div className="notice info" style={{ marginTop: '10px' }}>
+                        Secondary AI check skipped due to rate limit — your generated paper below is complete and ready.
+                      </div>
+                    ) : (
+                      <div
+                        className={`notice ${result.check.ok ? 'green' : 'warn'}`}
+                        style={{ marginTop: '10px' }}
+                      >
+                        <b>
+                          {result.check.ok
+                            ? 'AI check: no mistakes detected.'
+                            : 'AI check found possible items to review:'}
+                        </b>
+                        {!result.check.ok && (
+                          <div
+                            className="doc"
+                            dangerouslySetInnerHTML={{
+                              __html: renderMarkdown(result.check.report),
+                            }}
+                          />
+                        )}
+                      </div>
+                    )
                   )}
 
                   {/* Revision input */}

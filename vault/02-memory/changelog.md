@@ -15,6 +15,13 @@ tags: [changelog, history, releases]
 - Wired `studentBalance` in `ParentReportModal` for accurate multi-contract `Total Due` calculation and replaced legacy `-main` color tokens with design system CSS variables (`var(--green)`, `var(--yellow)`, `var(--red)`).
 - Added `ClassesView` `initialBatchFilter` deep-link support, Weekly Routine slot lookup across `s.schedule` (`day: 6`) & `s.scheduleDays` with batch filtering, and replaced invalid `var(--primary)` tokens with `var(--accent)`.
 - Updated `MoneyView` with `user?.email` owner Pro detection, studentId-based batch revenue attribution without contractId requirement, dark-theme lock overlay background, and resolved `HomeView` Radar batch/slot times.
+- Fixed `LessonModal` initial state loading when `!lesson` to accurately honor `initialBatchId` with mode `'batch'` and sync `initialStudentId`.
+- Updated `PaymentModal` `suggestAmount` to support active advance balances, verified `PaymentReceiptModal` dynamic currency, and resolved student/guardian phone numbers in `BatchFeeModal` WhatsApp reminder links.
+- Added `stripUndefinedDeep` in `firebase.ts` to sanitize Firestore documents and pricing/upgrade states, synced live `usedCount` in Owner Dashboard Promo Studio, normalized leading zeros in `OwnerDashboardView` pricing inputs, and sanitized `"None"` coaching/subtitle placeholders across receipts and settings.
+- Added `estimateInputTokens` guard (>75K tokens) and multi-model 429/503 fallback cascade (`gemini-2.5-flash` → `gemini-2.5-flash-lite` → `gemma-4-31b-it`) in `callAI`.
+- Made secondary AI verification opt-in by default in `AIView`, added on-demand "Verify accuracy with AI" action, sliced check input to 24K, added graceful rate-limit notification banner, and sanitized `"None"` print branding placeholders.
+- Added `/shared_results/{resultId}` Firestore security rule allowing public unguessable single-doc retrieval and authenticated tutor mutations, with `publishSharedExamResult` and `fetchSharedExamResult` helpers in `firebase.ts`.
+- Hardened `ResultView.tsx` with fallback Exam synthesis when `attempt.examId` is missing, read-only mode for shared public links via `fetchSharedExamResult`, and one-click `"🔗 Share Result Link"` clipboard sharing.
 
 ## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
 - Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.

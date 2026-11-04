@@ -11,6 +11,9 @@ import { StoreProvider, useStore } from '../store/context';
 import * as context from '../store/context';
 import { Question } from '../types';
 
+const mockPublishShared = vi.fn((attempt, exam, meta) => Promise.resolve(attempt.id));
+const mockFetchShared = vi.fn((resultId) => Promise.resolve<any>(null));
+
 vi.mock('../services/firebase', () => ({
   app: {},
   auth: { currentUser: null },
@@ -26,6 +29,8 @@ vi.mock('../services/firebase', () => ({
   createUserWithEmailAndPassword: vi.fn(),
   signOut: vi.fn(),
   fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 99, freeStudentLimit: 15 })),
+  publishSharedExamResult: (attempt: any, exam: any, meta?: any) => mockPublishShared(attempt, exam, meta),
+  fetchSharedExamResult: (resultId: string) => mockFetchShared(resultId),
 }));
 
 describe('isQuestionAnswered helper', () => {
@@ -408,5 +413,168 @@ describe('StoreContext deleteExamScore resets scoreLogged on attempts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete Score' }));
     // Attempt scoreLogged should now be reset to false ('Not Logged')
     expect(screen.getByTestId('attempt-status').textContent).toBe('Not Logged');
+  });
+
+  describe('ResultView Resilient Fallbacks & Shared Result Mode', () => {
+    it('synthesizes fallback Exam when attempt.examId is missing from state.exams', () => {
+      const mockNavigate = vi.fn();
+      const mockState: any = {
+        students: [{ id: 'std_1', name: 'Tanvir Ahmed' }],
+        attempts: [
+          {
+            id: 'att_missing_ex',
+            examId: 'non_existent_exam_id',
+            title: 'Biology Chapter 2 Quiz',
+            studentId: 'std_1',
+            status: 'submitted',
+            startedAt: Date.now(),
+            endsAt: Date.now(),
+            answers: {},
+            marks: {},
+            aiMarks: {},
+          },
+        ],
+        exams: [], // No exams matching examId!
+        settings: { tutorName: 'Master Tutor', currency: '৳' },
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        studentName: () => 'Tanvir Ahmed',
+        saveAttempt: vi.fn(),
+        deleteAttempt: vi.fn(),
+        saveExam: vi.fn(),
+        addExamScore: vi.fn(),
+        toast: vi.fn(),
+      } as any);
+
+      render(<ResultView attemptId="att_missing_ex" onNavigate={mockNavigate} />);
+
+      expect(screen.queryByText('Result not found.')).not.toBeInTheDocument();
+      expect(screen.getByText('Biology Chapter 2 Quiz')).toBeInTheDocument();
+      expect(screen.getByText('🔗 Share Result Link')).toBeInTheDocument();
+    });
+
+    it('fetches shared result and renders in read-only mode when attempt is not in state.attempts', async () => {
+      const mockNavigate = vi.fn();
+      const mockState: any = {
+        students: [],
+        attempts: [], // Not in local attempts!
+        exams: [],
+        settings: { tutorName: 'Tutor', currency: '৳' },
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        studentName: () => '',
+        saveAttempt: vi.fn(),
+        deleteAttempt: vi.fn(),
+        saveExam: vi.fn(),
+        addExamScore: vi.fn(),
+        toast: vi.fn(),
+      } as any);
+
+      mockFetchShared.mockResolvedValueOnce({
+        id: 'att_shared_public',
+        attempt: {
+          id: 'att_shared_public',
+          title: 'Shared Higher Math Model Test',
+          startedAt: 1730000000000,
+          answers: { q1: 1 },
+          marks: { q2: 5 },
+          aiMarks: {},
+        },
+        exam: {
+          id: 'ex_math',
+          title: 'Higher Math',
+          duration: 60,
+          questions: [
+            { id: 'q1', n: 1, type: 'mcq', text: 'sin(90)?', options: ['0', '1'], answer: 1, marks: 1 },
+            { id: 'q2', n: 2, type: 'written', text: 'Prove identity', marks: 5 },
+          ],
+        },
+        studentFirstName: 'Rahim',
+        tutorName: 'Engr. Sazid',
+      });
+
+      render(<ResultView attemptId="att_shared_public" onNavigate={mockNavigate} />);
+
+      // Verify shared data rendered
+      const title = await screen.findByText('Shared Higher Math Model Test');
+      expect(title).toBeInTheDocument();
+      expect(screen.getByText('Shared Result (Read-Only)')).toBeInTheDocument();
+      expect(screen.getByText(/Rahim/)).toBeInTheDocument();
+      expect(screen.getByText(/Tutor: Engr. Sazid/)).toBeInTheDocument();
+
+      // Read-only controls: editing buttons should be hidden
+      expect(screen.queryByText('📈 Log Score to Student Profile')).not.toBeInTheDocument();
+      expect(screen.queryByText('Delete result')).not.toBeInTheDocument();
+      expect(screen.queryByText('🔗 Share Result Link')).not.toBeInTheDocument();
+      expect(screen.queryByText('Save marks')).not.toBeInTheDocument();
+
+      // Print should remain available
+      expect(screen.getByText('🖨️ Print')).toBeInTheDocument();
+    });
+
+    it('copies result URL to clipboard when 🔗 Share Result Link is clicked', async () => {
+      const mockNavigate = vi.fn();
+      const mockToast = vi.fn();
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+      });
+
+      const mockState: any = {
+        students: [{ id: 'std_2', name: 'Nabila Karim' }],
+        attempts: [
+          {
+            id: 'att_local_share',
+            examId: 'ex_local_share',
+            title: 'English 1st Paper',
+            studentId: 'std_2',
+            startedAt: Date.now(),
+            answers: {},
+            marks: {},
+            aiMarks: {},
+          },
+        ],
+        exams: [
+          {
+            id: 'ex_local_share',
+            title: 'English Exam',
+            duration: 30,
+            questions: [],
+          },
+        ],
+        settings: { tutorName: 'Teacher Tanvir', currency: '৳' },
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        studentName: () => 'Nabila Karim',
+        saveAttempt: vi.fn(),
+        deleteAttempt: vi.fn(),
+        saveExam: vi.fn(),
+        addExamScore: vi.fn(),
+        toast: mockToast,
+      } as any);
+
+      render(<ResultView attemptId="att_local_share" onNavigate={mockNavigate} />);
+
+      const shareBtn = screen.getByText('🔗 Share Result Link');
+      fireEvent.click(shareBtn);
+
+      await act(async () => {});
+
+      expect(mockPublishShared).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'att_local_share' }),
+        expect.objectContaining({ id: 'ex_local_share' }),
+        expect.objectContaining({ studentFirstName: 'Nabila Karim', tutorName: 'Teacher Tanvir' })
+      );
+      expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('#/result/att_local_share'));
+      expect(mockToast).toHaveBeenCalledWith(expect.stringMatching(/copied to clipboard/i), 'success');
+    });
   });
 });

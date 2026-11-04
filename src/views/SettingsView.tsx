@@ -5,7 +5,7 @@ import { AI_PROVIDERS, fetchModelList, callAI, autoModel, readModelCache, getDef
 import { todayISO, fmtDate } from '../utils/date';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { auth, onAuthStateChanged, submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, fetchPricingConfig, updatePricingConfig, evaluatePromoCode } from '../services/firebase';
-import { isOwnerEmail } from '../utils/auth';
+import { isOwnerEmail, sanitizePlaceholder } from '../utils/auth';
 import { TrxUpgradeRequest, PricingConfig } from '../types';
 import { requestNotificationPermission, sendLocalReminderNotification, getDueRemindersSummary } from '../services/notifications';
 import { ApkShareModal } from '../components/ApkShareModal';
@@ -41,8 +41,12 @@ export const SettingsView: React.FC = () => {
   const isPro = isProUser(billingState, user?.email);
 
   const [tutorName, setTutorName] = useState(state.settings.tutorName || '');
-  const [credentials, setCredentials] = useState(state.profile?.credentials || '');
-  const [brandTitle, setBrandTitle] = useState(state.profile?.brandTitle || '');
+  const [credentials, setCredentials] = useState(
+    sanitizePlaceholder(state.profile?.credentials || (state.settings as any)?.tutorCredentials)
+  );
+  const [brandTitle, setBrandTitle] = useState(
+    sanitizePlaceholder(state.profile?.brandTitle || (state.settings as any)?.coachingName)
+  );
   const [showPrintHeader, setShowPrintHeader] = useState(state.profile?.showPrintHeader ?? true);
   const [showPrintWatermark, setShowPrintWatermark] = useState(state.profile?.showPrintWatermark ?? true);
   const [currency, setCurrency] = useState(state.settings.currency || '৳');
@@ -139,13 +143,17 @@ export const SettingsView: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanCredentials = sanitizePlaceholder(credentials);
+    const cleanBrandTitle = sanitizePlaceholder(brandTitle);
     updateSettings({
       tutorName: tutorName.trim(),
       currency,
-    });
+      coachingName: cleanBrandTitle,
+      tutorCredentials: cleanCredentials,
+    } as any);
     updateProfile({
-      credentials: credentials.trim(),
-      brandTitle: brandTitle.trim(),
+      credentials: cleanCredentials,
+      brandTitle: cleanBrandTitle,
       showPrintHeader,
       showPrintWatermark,
       notificationsEnabled,

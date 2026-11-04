@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import { Payment } from '../types';
 import { useStore } from '../store/context';
 import { fmtDate, fmtN } from '../utils/date';
+import { sanitizePlaceholder } from '../utils/auth';
 
 interface PaymentReceiptModalProps {
   isOpen: boolean;
@@ -29,7 +30,8 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
   const dateStr = fmtDate(payment.date);
   const amountStr = `${state.settings.currency || '৳'} ${fmtN(payment.amount)}`;
   const tutorName = state.settings.tutorName || 'Tutor';
-  const brandTitle = state.profile?.brandTitle || '';
+  const rawBrand = (state.settings as any)?.coachingName || state.profile?.brandTitle || '';
+  const brandTitle = sanitizePlaceholder(rawBrand);
 
   const generateWhatsAppMessage = () => {
     let msg = '';

@@ -247,12 +247,22 @@ export async function fetchModelList(provider: 'gemini' | 'groq' | 'openrouter' 
   return { list, tier };
 }
 
+export function estimateInputTokens(text: string, files: Array<{ mimeType: string; data: string }> = []): number {
+  const textTokens = Math.ceil((text || '').length / 3);
+  const fileTokens = (files || []).reduce((sum, f) => sum + Math.ceil((f.data?.length || 0) / 180), 0);
+  return textTokens + fileTokens;
+}
+
 export async function callAI(
   system: string,
   user: string,
   state: AppState,
   opts: { temperature?: number; maxTokens?: number; json?: boolean; files?: Array<{ mimeType: string; data: string }>; onFallback?: (msg: string) => void } = {}
 ): Promise<string> {
+  if (estimateInputTokens(system + '\n' + user, opts.files) > 75000) {
+    throw new Error('Input document is too large for a single AI request (>75K tokens). Please upload fewer pages or select specific topics/chapters.');
+  }
+
   const provider = state.ai.provider;
   const key = (state.ai.keys[provider] || '').trim();
   const model = autoModel(provider, state);
@@ -288,28 +298,32 @@ export async function callAI(
       });
     };
 
-    let res = await tryFetch(model);
+    const baseChain = [model, 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemma-4-31b-it'];
+    const hasJsonOrFiles = Boolean(opts.json || (opts.files && opts.files.length > 0));
+    const filteredChain = hasJsonOrFiles ? baseChain.filter(m => !m.includes('gemma')) : baseChain;
+    const chain = Array.from(new Set(filteredChain));
 
-    if (!res.ok && res.status === 429) {
-      const errClone = res.clone();
-      const errText = await errClone.text().catch(() => '');
-
-      // Automatic Runtime Fallback on `limit: 0` Quota Errors
-      if (errText.includes('limit: 0') || errText.includes('free_tier')) {
-        const fallbackModel = 'gemini-2.5-flash';
-        if (opts.onFallback && model !== fallbackModel) {
-          opts.onFallback(`Falling back to ${fallbackModel} due to Free Tier quota limits on ${model}.`);
-        }
-        res = await tryFetch(fallbackModel);
+    let res: Response | null = null;
+    for (let i = 0; i < chain.length; i++) {
+      const currentModel = chain[i];
+      res = await tryFetch(currentModel);
+      if (res.ok) {
+        break;
       }
+      if ((res.status === 429 || res.status === 503 || res.status === 502) && i < chain.length - 1) {
+        const nextModel = chain[i + 1];
+        opts.onFallback?.(`Switching from ${currentModel} to ${nextModel} (rate limit or high demand)...`);
+        continue;
+      }
+      break;
     }
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      if (res.status === 429) {
-        throw new Error(`Quota exceeded or model unavailable. Try switching to gemini-2.5-flash or gemini-2.5-flash-lite. (${err.error?.message || res.status})`);
+    if (!res || !res.ok) {
+      const err = (await res?.json().catch(() => ({}))) || {};
+      if (res?.status === 429) {
+        throw new Error(`Quota exceeded or model unavailable. Try switching to gemini-2.5-flash or gemini-2.5-flash-lite. (${err.error?.message || res?.status})`);
       }
-      throw new Error(err.error?.message || `Gemini API error: ${res.status}`);
+      throw new Error(err.error?.message || `Gemini API error: ${res?.status}`);
     }
     const data = await res.json();
     const cand = data.candidates?.[0];

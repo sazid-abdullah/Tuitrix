@@ -61,9 +61,11 @@ export const LessonModal: React.FC<LessonModalProps> = ({
       setHomework(lesson.homework || '');
       setNotes(lesson.notes || '');
     } else {
-      const sid = initialStudentId || (state.students[0]?.id ?? '');
+      const sid = initialStudentId || state.students[0]?.id || '';
       const s = getStudent(sid);
       const curDate = initialDate || todayISO();
+      setMode(initialBatchId ? 'batch' : 'single');
+      setBatchId(initialBatchId || '');
       setStudentId(sid);
       setDate(curDate);
       setTime(initialTime || nowTime());
@@ -74,10 +76,6 @@ export const LessonModal: React.FC<LessonModalProps> = ({
       setTopics('');
       setHomework('');
       setNotes('');
-      if (initialBatchId) {
-         setMode('batch');
-         setBatchId(initialBatchId);
-      }
     }
   }, [lesson, initialStudentId, initialBatchId, initialDate, initialTime, initialDuration, initialStatus, isOpen]);
 
