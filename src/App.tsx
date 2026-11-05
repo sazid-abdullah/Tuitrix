@@ -97,7 +97,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
 import { Student, Contract, Lesson, Payment, Expense, Goal, SavedDoc } from './types';
 import { fmtClock, uid } from './utils/date';
-import { callAI, EXAM_JSON_SYSTEM, examJsonPrompt, normalizeExam, parseAiJson } from './services/ai';
+import {
+  callAI,
+  EXAM_JSON_SYSTEM,
+  examJsonPrompt,
+  normalizeExam,
+  parseAiJson,
+  extractAndPlaceholderMedia,
+  restoreMediaPlaceholders,
+} from './services/ai';
 
 export const App: React.FC = () => {
   const { state, isStateLoaded, saveAttempt, saveExam, saveDoc, saveAiResource, toast } = useStore();
@@ -445,14 +453,16 @@ export const App: React.FC = () => {
             onNavigate={navigate}
             onStartExam={async (doc: SavedDoc) => {
               try {
-                let existingExam = state.exams.find(e => e.docId === doc.id || e.id === doc.id);
+                let existingExam = state.exams.find(e => e.docId === doc.id || e.id === doc.id || (e.title && e.title.trim() === doc.title.trim()));
                 if (!existingExam) {
                   toast('Preparing interactive exam questions with AI…', 'info');
-                  const rawJson = await callAI(EXAM_JSON_SYSTEM, examJsonPrompt(doc.content), state, {
+                  const { cleanText, mediaMap } = extractAndPlaceholderMedia(doc.content);
+                  const rawJson = await callAI(EXAM_JSON_SYSTEM, examJsonPrompt(cleanText), state, {
                     temperature: 0.1,
                     json: true,
+                    onFallback: (msg) => toast(msg, 'info'),
                   });
-                  const parsed = normalizeExam(parseAiJson(rawJson));
+                  const parsed = normalizeExam(restoreMediaPlaceholders(parseAiJson(rawJson), mediaMap));
                   const newExam = {
                     ...parsed,
                     id: uid(),

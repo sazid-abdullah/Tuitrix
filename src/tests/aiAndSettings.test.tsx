@@ -5,7 +5,14 @@ import { expect, describe, it, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { callAI, estimateInputTokens } from '../services/ai';
+import {
+  callAI,
+  estimateInputTokens,
+  autoModel,
+  extractAndPlaceholderMedia,
+  restoreMediaPlaceholders,
+  extractFileText,
+} from '../services/ai';
 import { AIView } from '../views/AIView';
 import * as context from '../store/context';
 import { sanitizePlaceholder } from '../utils/auth';
@@ -33,11 +40,14 @@ describe('estimateInputTokens & Input Token Guard', () => {
   it('correctly calculates text tokens and file tokens', () => {
     // 30 characters -> 10 tokens
     expect(estimateInputTokens('123456789012345678901234567890')).toBe(10);
-    // with file: 360 base64 chars -> 2 tokens
+    // with file: 1500 base64 chars -> Math.ceil(1500 / 750) = 2 tokens
     const tokensWithFile = estimateInputTokens('123', [
-      { mimeType: 'image/png', data: 'a'.repeat(360) }
+      { mimeType: 'image/png', data: 'a'.repeat(1500) }
     ]);
     expect(tokensWithFile).toBe(1 + 2);
+    // with embedded data-URI image: 258 tokens + 1 text token = 259
+    const tokensWithDataUri = estimateInputTokens('123data:image/png;base64,AAAA');
+    expect(tokensWithDataUri).toBe(1 + 258);
   });
 
   it('blocks payloads over 75K tokens with explicit error', async () => {
@@ -158,18 +168,18 @@ describe('callAI Multi-Model Fallback Cascade', () => {
       ai: {
         provider: 'gemini',
         keys: { gemini: 'test-api-key' },
-        models: { gemini: 'gemini-2.5-flash' }, // Old deprecated key/model
+        models: { gemini: 'gemini-3.8-flash' },
       },
     };
 
     const fallbackMessages: string[] = [];
 
     global.fetch = vi.fn().mockImplementation((url: string) => {
-      if (url.includes('gemini-2.5-flash')) {
+      if (url.includes('gemini-3.8-flash')) {
         return Promise.resolve({
           ok: false,
           status: 404,
-          json: () => Promise.resolve({ error: { message: 'models/gemini-2.5-flash is not found' } }),
+          json: () => Promise.resolve({ error: { message: 'models/gemini-3.8-flash is not found' } }),
         });
       }
       return Promise.resolve({
@@ -178,7 +188,7 @@ describe('callAI Multi-Model Fallback Cascade', () => {
         json: () =>
           Promise.resolve({
             candidates: [
-              { content: { parts: [{ text: 'Recovered on gemini-3.8-flash' }] } },
+              { content: { parts: [{ text: 'Recovered on gemini-3.7-flash' }] } },
             ],
           }),
       });
@@ -188,8 +198,8 @@ describe('callAI Multi-Model Fallback Cascade', () => {
       onFallback: (msg) => fallbackMessages.push(msg),
     });
 
-    expect(result).toBe('Recovered on gemini-3.8-flash');
-    expect(fallbackMessages[0]).toContain('Switching from gemini-2.5-flash to gemini-3.8-flash');
+    expect(result).toBe('Recovered on gemini-3.7-flash');
+    expect(fallbackMessages[0]).toContain('Switching from gemini-3.8-flash to gemini-3.7-flash');
   });
 
   it('filters out gemma models when json mode is requested', async () => {
@@ -364,5 +374,99 @@ describe('AIView Opt-In Check & Banner Behavior', () => {
     expect(sanitizePlaceholder('N/A')).toBe('');
     expect(sanitizePlaceholder('  undefined  ')).toBe('');
     expect(sanitizePlaceholder('Apex Coaching')).toBe('Apex Coaching');
+  });
+});
+
+describe('autoModel auto-upgrades deprecated gemini-2.5 models', () => {
+  it('automatically upgrades cached gemini-2.5-flash and gemini-2.0-flash to gemini-3.8-flash', () => {
+    const stateWith25Flash: any = {
+      ai: {
+        provider: 'gemini',
+        keys: { gemini: 'key' },
+        models: { gemini: 'gemini-2.5-flash' },
+      },
+    };
+    expect(autoModel('gemini', stateWith25Flash)).toBe('gemini-3.8-flash');
+
+    const stateWith20Flash: any = {
+      ai: {
+        provider: 'gemini',
+        keys: { gemini: 'key' },
+        models: { gemini: 'gemini-2.0-flash' },
+      },
+    };
+    expect(autoModel('gemini', stateWith20Flash)).toBe('gemini-3.8-flash');
+
+    const stateWith35Flash: any = {
+      ai: {
+        provider: 'gemini',
+        keys: { gemini: 'key' },
+        models: { gemini: 'gemini-3.5-flash' },
+      },
+    };
+    expect(autoModel('gemini', stateWith35Flash)).toBe('gemini-3.5-flash');
+  });
+});
+
+describe('Media Placeholder Extraction & Restoration on 50-MCQ Picture Papers', () => {
+  it('shrinks a 50-MCQ paper with embedded base64 images to under 5,000 tokens and restores all images', () => {
+    // Generate 50 MCQs with embedded base64 images (~1,000 chars base64 each -> >50,000 chars of base64)
+    const questionsText = Array.from({ length: 50 }, (_, i) => {
+      const dummyBase64 = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP${'8'.repeat(1000)}z8=`;
+      return `Q${i + 1}. Look at diagram: ${dummyBase64}\nWhat is the value in diagram ${i + 1}?\nA) 1\nB) 2\nC) 3\nD) 4\nAnswer: A\n`;
+    }).join('\n');
+
+    const fullContent = `Physics 50-MCQ Model Test\n\n${questionsText}\nstream\nBinaryGarbageStreamData\nendstream`;
+
+    // Raw content token estimate is large
+    const rawTokens = estimateInputTokens(fullContent);
+    expect(rawTokens).toBeGreaterThan(12000);
+
+    // Extract placeholders
+    const { cleanText, mediaMap } = extractAndPlaceholderMedia(fullContent);
+
+    // Media map must hold all 50 images
+    expect(Object.keys(mediaMap).length).toBe(50);
+    // Clean text must not have raw PDF binary noise
+    expect(cleanText).not.toContain('BinaryGarbageStreamData');
+    // Token estimate for the cleaned text sent to AI should be well under 5,000 tokens
+    const cleanTokens = estimateInputTokens(cleanText);
+    expect(cleanTokens).toBeLessThan(5000);
+
+    // Mock parsed exam JSON output from AI that contains placeholders
+    const parsedExam = {
+      title: 'Physics 50-MCQ Model Test',
+      questions: Array.from({ length: 50 }, (_, i) => ({
+        id: `q${i + 1}`,
+        type: 'mcq',
+        text: `Look at diagram: __TUITRIX_MEDIA_${i}__\nWhat is the value in diagram ${i + 1}?`,
+        options: ['1', '2', '3', '4'],
+        answer: 0,
+      })),
+    };
+
+    // Restore media placeholders
+    const restored = restoreMediaPlaceholders(parsedExam, mediaMap);
+
+    // Verify all 50 questions have their original base64 images intact
+    expect(restored.questions.length).toBe(50);
+    for (let i = 0; i < 50; i++) {
+      expect(restored.questions[i].text).toContain('data:image/png;base64,');
+      expect(restored.questions[i].text).not.toContain(`__TUITRIX_MEDIA_${i}__`);
+    }
+  });
+});
+
+describe('extractFileText PDF and Image Guard', () => {
+  it('throws helpful message when PDF or image files are selected', async () => {
+    const pdfFile = new File(['%PDF-1.4 binary content'], 'exam.pdf', { type: 'application/pdf' });
+    await expect(extractFileText(pdfFile)).rejects.toThrow(
+      'For PDF or image question papers, please use the "Upload question paper" button so AI can read diagrams and questions accurately.'
+    );
+
+    const pngFile = new File(['png bytes'], 'diagram.png', { type: 'image/png' });
+    await expect(extractFileText(pngFile)).rejects.toThrow(
+      'For PDF or image question papers, please use the "Upload question paper" button so AI can read diagrams and questions accurately.'
+    );
   });
 });

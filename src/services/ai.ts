@@ -69,7 +69,12 @@ export function getDefaultModel(provider: 'gemini' | 'groq' | 'openrouter' | 'ol
 
 export function autoModel(provider: 'gemini' | 'groq' | 'openrouter' | 'ollama', state: AppState): string {
   const userSelected = sanitizeModelId(state.ai?.models?.[provider] || '');
-  if (userSelected) return userSelected;
+  if (userSelected) {
+    if (provider === 'gemini' && /^gemini-2\.[05]/.test(userSelected)) {
+      return 'gemini-3.8-flash';
+    }
+    return userSelected;
+  }
   return getDefaultModel(provider);
 }
 
@@ -93,6 +98,9 @@ export function parseAiJson(raw: string): any {
 }
 
 export async function extractFileText(file: File): Promise<string> {
+  if (/\.(pdf|jpe?g|png|webp|gif)$/i.test(file.name)) {
+    throw new Error('For PDF or image question papers, please use the "Upload question paper" button so AI can read diagrams and questions accurately.');
+  }
   if (/\.docx$/i.test(file.name)) {
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -261,9 +269,69 @@ export async function fetchModelList(provider: 'gemini' | 'groq' | 'openrouter' 
   return { list, tier };
 }
 
+export function extractAndPlaceholderMedia(content: string): { cleanText: string; mediaMap: Record<string, string> } {
+  if (!content) return { cleanText: '', mediaMap: {} };
+  const mediaMap: Record<string, string> = {};
+  let counter = 0;
+
+  // 1. Strip raw PDF binary stream...endstream noise
+  let cleanText = String(content).replace(/stream[\s\S]*?endstream/gi, '');
+
+  // 2. Replace embedded data-URI images (base64)
+  cleanText = cleanText.replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/g, (match) => {
+    const placeholder = `__TUITRIX_MEDIA_${counter++}__`;
+    mediaMap[placeholder] = match;
+    return placeholder;
+  });
+
+  // 3. Replace embedded inline SVGs
+  cleanText = cleanText.replace(/<svg[\s\S]*?<\/svg>/gi, (match) => {
+    const placeholder = `__TUITRIX_MEDIA_${counter++}__`;
+    mediaMap[placeholder] = match;
+    return placeholder;
+  });
+
+  // 4. Safe truncation to at most 120,000 characters
+  if (cleanText.length > 120000) {
+    cleanText = cleanText.slice(0, 120000);
+  }
+
+  return { cleanText, mediaMap };
+}
+
+export function restoreMediaPlaceholders(obj: any, mediaMap: Record<string, string>): any {
+  if (!obj || !mediaMap || Object.keys(mediaMap).length === 0) return obj;
+
+  const restoreString = (str: string): string => {
+    if (typeof str !== 'string' || !str.includes('__TUITRIX_MEDIA_')) return str;
+    return str.replace(/__TUITRIX_MEDIA_\d+__/g, (placeholder) => mediaMap[placeholder] || placeholder);
+  };
+
+  if (typeof obj === 'string') {
+    return restoreString(obj);
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => restoreMediaPlaceholders(item, mediaMap));
+  }
+
+  if (typeof obj === 'object') {
+    const res: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      res[key] = restoreMediaPlaceholders(obj[key], mediaMap);
+    }
+    return res;
+  }
+
+  return obj;
+}
+
 export function estimateInputTokens(text: string, files: Array<{ mimeType: string; data: string }> = []): number {
-  const textTokens = Math.ceil((text || '').length / 3);
-  const fileTokens = (files || []).reduce((sum, f) => sum + Math.ceil((f.data?.length || 0) / 180), 0);
+  const imageRegex = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/g;
+  const embeddedImageMatches = (text || '').match(imageRegex) || [];
+  const strippedText = (text || '').replace(imageRegex, '');
+  const textTokens = Math.ceil(strippedText.length / 3) + embeddedImageMatches.length * 258;
+  const fileTokens = (files || []).reduce((sum, f) => sum + Math.min(2000, Math.ceil((f.data?.length || 0) / 750)), 0);
   return textTokens + fileTokens;
 }
 

@@ -32,6 +32,15 @@ export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
+      if (/\.(pdf|jpe?g|png|webp|gif)$/i.test(f.name)) {
+        toast(
+          'For PDF or image question papers, please use the "Upload question paper" button so AI can read diagrams and questions accurately.',
+          'error'
+        );
+        e.target.value = '';
+        setFile(null);
+        return;
+      }
       setFile(f);
       if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''));
     }
@@ -40,6 +49,14 @@ export const ImportDocModal: React.FC<ImportDocModalProps> = ({ isOpen, onClose 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
+
+    if (/\.(pdf|jpe?g|png|webp|gif)$/i.test(file.name)) {
+      toast(
+        'For PDF or image question papers, please use the "Upload question paper" button so AI can read diagrams and questions accurately.',
+        'error'
+      );
+      return;
+    }
 
     if (!canSaveAiResource(currentSavedCount, isPro)) {
       toast(

@@ -30,6 +30,8 @@ tags: [changelog, history, releases]
 - Exported `formatPromoBannerText` helper in `OwnerDashboardView` and added "📢 Set as Banner" button in Promo Studio to instantly sync active promo codes to the live checkout announcement banner.
 - Migrated default Gemini model from deprecated `2.5-flash` to modern `gemini-3.8-flash` with updated Free-tier priority list filtering out legacy models.
 - Enhanced `callAI` multi-model fallback cascade to chain through Gemini 3.x models and catch 404/400 deprecation and 429/503 rate-limit errors automatically.
+- Implemented `extractAndPlaceholderMedia` and `restoreMediaPlaceholders` in `ai.ts` and `App.tsx` for 50-MCQ picture papers, with accurate embedded base64 image token estimation in `estimateInputTokens`.
+- Added automatic state migration in `autoModel` upgrading legacy `gemini-2.5-*`/`gemini-2.0-*` selections to `gemini-3.8-flash`, and guarded `ImportDocModal` and `extractFileText` against raw binary PDF dumps.
 
 ## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
 - Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.
