@@ -26,7 +26,7 @@ vi.mock('../services/ai', async (importOriginal) => {
     ...actual,
     fetchModelList: vi.fn(),
     readModelCache: vi.fn(() => ({})),
-    autoModel: vi.fn(() => 'gemini-2.5-flash'),
+    autoModel: vi.fn(() => 'gemini-3.8-flash'),
   };
 });
 
@@ -78,8 +78,8 @@ describe('SettingsView AI Configuration', () => {
   it('calls fetchModelList when API key is entered (debounced)', async () => {
     (aiServices.fetchModelList as any).mockResolvedValue({
       list: [
-        { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash' },
-        { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' }
+        { id: 'gemini-3.8-flash', name: 'gemini-3.8-flash' },
+        { id: 'gemini-3.5-flash', name: 'gemini-3.5-flash' }
       ],
       tier: 'free'
     });
@@ -99,7 +99,7 @@ describe('SettingsView AI Configuration', () => {
   it('shows loaded models message when models are fetched', async () => {
     (aiServices.fetchModelList as any).mockResolvedValue({
       list: [
-        { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash' },
+        { id: 'gemini-3.8-flash', name: 'gemini-3.8-flash' },
       ],
       tier: 'free'
     });

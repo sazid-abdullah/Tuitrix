@@ -54,7 +54,7 @@ describe('AI Services', () => {
           json: () => Promise.resolve({
             models: [
               { name: 'models/gemini-3.5-transcribe', displayName: 'Gemini 3.5 Transcribe', supportedGenerationMethods: ['generateContent'] },
-              { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedGenerationMethods: ['generateContent'] },
               { name: 'models/nano-banana-2.1', displayName: 'Nano Banana', supportedGenerationMethods: ['generateContent'] }
             ]
           })
@@ -64,7 +64,7 @@ describe('AI Services', () => {
       const result = await fetchModelList('gemini', mockState as any);
       expect(result.tier).toBe('paid');
       expect(result.list.length).toBe(1);
-      expect(result.list[0].id).toBe('gemini-2.5-flash');
+      expect(result.list[0].id).toBe('gemini-3.8-flash');
     });
 
     it('excludes paid-only models on Free Tier', async () => {
@@ -77,9 +77,9 @@ describe('AI Services', () => {
           json: () => Promise.resolve({
             models: [
               { name: 'models/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro Preview', supportedGenerationMethods: ['generateContent'] },
-              { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedGenerationMethods: ['generateContent'] },
               { name: 'models/gemini-4-argon', displayName: 'Gemini 4 Argon', supportedGenerationMethods: ['generateContent'] },
-              { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', supportedGenerationMethods: ['generateContent'] }
+              { name: 'models/gemini-3.5-flash-lite', displayName: 'Gemini 3.5 Flash Lite', supportedGenerationMethods: ['generateContent'] }
             ]
           })
         });
@@ -88,7 +88,7 @@ describe('AI Services', () => {
       const result = await fetchModelList('gemini', mockState as any);
       expect(result.tier).toBe('free');
       expect(result.list.length).toBe(2);
-      expect(result.list.map(m => m.id).sort()).toEqual(['gemini-2.5-flash', 'gemini-2.5-pro'].sort());
+      expect(result.list.map(m => m.id).sort()).toEqual(['gemini-3.5-flash-lite', 'gemini-3.8-flash'].sort());
     });
 
     it('includes paid Pro models on Paid Tier', async () => {
@@ -101,7 +101,7 @@ describe('AI Services', () => {
           json: () => Promise.resolve({
             models: [
               { name: 'models/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro Preview', supportedGenerationMethods: ['generateContent'] },
-              { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedGenerationMethods: ['generateContent'] },
             ]
           })
         });
@@ -110,21 +110,21 @@ describe('AI Services', () => {
       const result = await fetchModelList('gemini', mockState as any);
       expect(result.tier).toBe('paid');
       expect(result.list.length).toBe(2);
-      expect(result.list.map(m => m.id).sort()).toEqual(['gemini-2.5-flash', 'gemini-3.1-pro-preview'].sort());
+      expect(result.list.map(m => m.id).sort()).toEqual(['gemini-3.1-pro-preview', 'gemini-3.8-flash'].sort());
     });
   });
 
   describe('sanitizeModelId & getDefaultModel', () => {
     it('cleans model ids properly', () => {
-      expect(sanitizeModelId('models/gemini-2.5-flash')).toBe('gemini-2.5-flash');
-      expect(sanitizeModelId('gemini-2.5-flash — Fast & Capable')).toBe('gemini-2.5-flash');
+      expect(sanitizeModelId('models/gemini-3.8-flash')).toBe('gemini-3.8-flash');
+      expect(sanitizeModelId('gemini-3.8-flash — Fast & Capable')).toBe('gemini-3.8-flash');
       expect(sanitizeModelId('llama-3.3-70b-versatile – Recommended')).toBe('llama-3.3-70b-versatile');
-      expect(sanitizeModelId('auto (gemini-2.5-flash)')).toBe('');
+      expect(sanitizeModelId('auto (gemini-3.8-flash)')).toBe('');
       expect(sanitizeModelId('')).toBe('');
     });
 
     it('returns default fallback model for each provider', () => {
-      expect(getDefaultModel('gemini')).toBe('gemini-2.5-flash');
+      expect(getDefaultModel('gemini')).toBe('gemini-3.8-flash');
       expect(getDefaultModel('groq')).toBe('llama-3.3-70b-versatile');
       expect(getDefaultModel('openrouter')).toBe('openrouter/free');
     });

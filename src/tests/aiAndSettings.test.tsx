@@ -46,7 +46,7 @@ describe('estimateInputTokens & Input Token Guard', () => {
       ai: {
         provider: 'gemini',
         keys: { gemini: 'fake-key' },
-        models: { gemini: 'gemini-2.5-flash' },
+        models: { gemini: 'gemini-3.8-flash' },
       },
     };
 
@@ -65,7 +65,7 @@ describe('callAI Multi-Model Fallback Cascade', () => {
     global.fetch = originalFetch;
   });
 
-  it('automatically falls back from gemini-3.8-flash to gemini-2.5-flash on 429 response', async () => {
+  it('automatically falls back from gemini-3.8-flash to gemini-3.7-flash on 429 response', async () => {
     const mockState: any = {
       ai: {
         provider: 'gemini',
@@ -86,14 +86,14 @@ describe('callAI Multi-Model Fallback Cascade', () => {
           json: () => Promise.resolve({ error: { message: 'Resource exhausted (quota limit)' } }),
         });
       }
-      if (url.includes('gemini-2.5-flash')) {
+      if (url.includes('gemini-3.7-flash')) {
         return Promise.resolve({
           ok: true,
           status: 200,
           json: () =>
             Promise.resolve({
               candidates: [
-                { content: { parts: [{ text: 'Response from gemini-2.5-flash fallback' }] } },
+                { content: { parts: [{ text: 'Response from gemini-3.7-flash fallback' }] } },
               ],
             }),
         });
@@ -105,11 +105,11 @@ describe('callAI Multi-Model Fallback Cascade', () => {
       onFallback: (msg) => fallbackMessages.push(msg),
     });
 
-    expect(result).toBe('Response from gemini-2.5-flash fallback');
+    expect(result).toBe('Response from gemini-3.7-flash fallback');
     expect(requestedUrls[0]).toContain('gemini-3.8-flash');
-    expect(requestedUrls[1]).toContain('gemini-2.5-flash');
+    expect(requestedUrls[1]).toContain('gemini-3.7-flash');
     expect(fallbackMessages).toEqual([
-      'Switching from gemini-3.8-flash to gemini-2.5-flash (rate limit or high demand)...',
+      'Switching from gemini-3.8-flash to gemini-3.7-flash (rate limit or high demand)...',
     ]);
   });
 
@@ -138,7 +138,7 @@ describe('callAI Multi-Model Fallback Cascade', () => {
         json: () =>
           Promise.resolve({
             candidates: [
-              { content: { parts: [{ text: 'Recovered on 2.5-flash' }] } },
+              { content: { parts: [{ text: 'Recovered on 3.7-flash' }] } },
             ],
           }),
       });
@@ -148,9 +148,48 @@ describe('callAI Multi-Model Fallback Cascade', () => {
       onFallback: (msg) => fallbackMessages.push(msg),
     });
 
-    expect(result).toBe('Recovered on 2.5-flash');
+    expect(result).toBe('Recovered on 3.7-flash');
     expect(fallbackMessages.length).toBe(1);
-    expect(fallbackMessages[0]).toContain('Switching from gemini-3.8-flash to gemini-2.5-flash');
+    expect(fallbackMessages[0]).toContain('Switching from gemini-3.8-flash to gemini-3.7-flash');
+  });
+
+  it('automatically falls back on 404 or 400 deprecation/not-found error', async () => {
+    const mockState: any = {
+      ai: {
+        provider: 'gemini',
+        keys: { gemini: 'test-api-key' },
+        models: { gemini: 'gemini-2.5-flash' }, // Old deprecated key/model
+      },
+    };
+
+    const fallbackMessages: string[] = [];
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('gemini-2.5-flash')) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({ error: { message: 'models/gemini-2.5-flash is not found' } }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            candidates: [
+              { content: { parts: [{ text: 'Recovered on gemini-3.8-flash' }] } },
+            ],
+          }),
+      });
+    });
+
+    const result = await callAI('System', 'Prompt', mockState, {
+      onFallback: (msg) => fallbackMessages.push(msg),
+    });
+
+    expect(result).toBe('Recovered on gemini-3.8-flash');
+    expect(fallbackMessages[0]).toContain('Switching from gemini-2.5-flash to gemini-3.8-flash');
   });
 
   it('filters out gemma models when json mode is requested', async () => {
@@ -176,7 +215,7 @@ describe('callAI Multi-Model Fallback Cascade', () => {
       callAI('System', 'Prompt', mockState, { json: true })
     ).rejects.toThrow(/Quota exceeded/);
 
-    // Should contain gemini-3.8-flash, gemini-2.5-flash, gemini-2.5-flash-lite, but NOT gemma
+    // Should contain gemini-3.8-flash, gemini-3.7-flash, etc. but NOT gemma
     expect(requestedUrls.some((u) => u.includes('gemma'))).toBe(false);
   });
 });
@@ -209,7 +248,7 @@ describe('AIView Opt-In Check & Banner Behavior', () => {
     ai: {
       provider: 'gemini',
       keys: { gemini: 'api-key' },
-      models: { gemini: 'gemini-2.5-flash' },
+      models: { gemini: 'gemini-3.8-flash' },
     },
     dailyAiQuota: { date: '2026-11-04', used: 0 },
     billing: { tier: 'pro', validUntil: 2000000000000 },

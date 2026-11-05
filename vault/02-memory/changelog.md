@@ -28,6 +28,8 @@ tags: [changelog, history, releases]
 - Added `"🔗 Copy Parent Portal Link"` in `ParentReportModal.tsx` and implemented read-only Live Parent Portal fallback rendering in `StudentDetailView.tsx` when a student profile is opened via public share link.
 - Updated `LandingView` hero headline to compliant phrasing without subjective superlative claims and updated testimonials to role + location attributions with zero invented names.
 - Exported `formatPromoBannerText` helper in `OwnerDashboardView` and added "📢 Set as Banner" button in Promo Studio to instantly sync active promo codes to the live checkout announcement banner.
+- Migrated default Gemini model from deprecated `2.5-flash` to modern `gemini-3.8-flash` with updated Free-tier priority list filtering out legacy models.
+- Enhanced `callAI` multi-model fallback cascade to chain through Gemini 3.x models and catch 404/400 deprecation and 429/503 rate-limit errors automatically.
 
 ## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
 - Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.

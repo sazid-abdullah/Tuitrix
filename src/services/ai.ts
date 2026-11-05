@@ -8,7 +8,7 @@ export const AI_PROVIDERS = {
     needsKey: true,
     keyUrl: 'https://aistudio.google.com/apikey',
     note: 'Free tier with a Google account. Best all-round choice, handles Bangla exceptionally well.',
-    fallback: 'gemini-2.5-flash',
+    fallback: 'gemini-3.8-flash',
   },
   groq: {
     name: 'Groq',
@@ -185,7 +185,16 @@ export async function fetchModelList(provider: 'gemini' | 'groq' | 'openrouter' 
     if (!res.ok) throw new Error(`Gemini API error: ${res.statusText}`);
     const d = await res.json();
 
-    const freeTierModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'];
+    const freeTierModels = [
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemma-4-31b-it',
+    ];
 
     models = (d.models || [])
       .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
@@ -203,10 +212,15 @@ export async function fetchModelList(provider: 'gemini' | 'groq' | 'openrouter' 
           return false;
         }
 
+        // Filter out deprecated 2.5 models
+        if (/gemini-2\.5|gemini-2\.0/.test(lowerId)) {
+          return false;
+        }
+
         if (tier === 'free') {
           // Free tier constraints
-          const isFreeTierModel = /flash|flash-lite|gemma|gemini-2\.5-pro/.test(lowerId);
-          const isPaidOnlyPro = /gemini-3\.1-pro|gemini-3-pro|gemini-pro-latest|gemini-4-argon|exp|preview/.test(lowerId) && !/gemini-2\.5-pro/.test(lowerId);
+          const isFreeTierModel = /flash|flash-lite|gemma/.test(lowerId);
+          const isPaidOnlyPro = /gemini-3\.1-pro|gemini-3-pro|gemini-pro-latest|gemini-4-argon|exp|preview/.test(lowerId);
 
           if (!isFreeTierModel) return false;
           if (isPaidOnlyPro) return false;
@@ -298,10 +312,19 @@ export async function callAI(
       });
     };
 
-    const baseChain = [model, 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemma-4-31b-it'];
+    const baseChain = [
+      model,
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemma-4-31b-it',
+    ];
     const hasJsonOrFiles = Boolean(opts.json || (opts.files && opts.files.length > 0));
     const filteredChain = hasJsonOrFiles ? baseChain.filter(m => !m.includes('gemma')) : baseChain;
-    const chain = Array.from(new Set(filteredChain));
+    const chain = Array.from(new Set(filteredChain.filter(Boolean)));
 
     let res: Response | null = null;
     for (let i = 0; i < chain.length; i++) {
@@ -310,7 +333,7 @@ export async function callAI(
       if (res.ok) {
         break;
       }
-      if ((res.status === 429 || res.status === 503 || res.status === 502) && i < chain.length - 1) {
+      if ((res.status === 429 || res.status === 503 || res.status === 502 || res.status === 404 || res.status === 400) && i < chain.length - 1) {
         const nextModel = chain[i + 1];
         opts.onFallback?.(`Switching from ${currentModel} to ${nextModel} (rate limit or high demand)...`);
         continue;
@@ -321,7 +344,7 @@ export async function callAI(
     if (!res || !res.ok) {
       const err = (await res?.json().catch(() => ({}))) || {};
       if (res?.status === 429) {
-        throw new Error(`Quota exceeded or model unavailable. Try switching to gemini-2.5-flash or gemini-2.5-flash-lite. (${err.error?.message || res?.status})`);
+        throw new Error(`Quota exceeded or model unavailable. Try switching to gemini-3.8-flash or gemini-3.5-flash. (${err.error?.message || res?.status})`);
       }
       throw new Error(err.error?.message || `Gemini API error: ${res?.status}`);
     }
