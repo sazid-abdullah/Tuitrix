@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as firebaseMod from '../services/firebase';
-import { submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, evaluatePromoCode, fetchPlatformTelemetry, publishSharedExamResult, fetchSharedExamResult } from '../services/firebase';
+import { submitTrxUpgradeRequest, fetchPendingUpgradeRequests, reviewUpgradeRequest, evaluatePromoCode, fetchPlatformTelemetry, publishSharedExamResult, fetchSharedExamResult, publishSharedParentPortal, fetchSharedParentPortal } from '../services/firebase';
 import { PromoCode } from '../types';
 
 vi.mock('firebase/firestore', () => ({
@@ -270,6 +270,39 @@ describe('trxUpgrade functionality', () => {
       const cached = await fetchSharedExamResult('att_no_meta');
       expect(cached.studentFirstName).toBe('Student');
       expect(cached.tutorName).toBe('Tutor');
+    });
+  });
+
+  describe('publishSharedParentPortal & fetchSharedParentPortal', () => {
+    it('publishes shared parent portal, strips phone, guardianPhone, and address', async () => {
+      const snapshot = {
+        studentFirstName: 'Farhan',
+        grade: 'Class 9',
+        phone: '01712345678',
+        guardianPhone: '01812345678',
+        address: 'House 12, Road 4, Dhanmondi',
+        paidTotal: 5000,
+        totalDue: 0,
+        tutorName: 'Sir Newton',
+        undefinedField: undefined,
+      };
+
+      const id = await publishSharedParentPortal('portal_farhan', snapshot);
+      expect(id).toBe('portal_farhan');
+
+      const portal = await fetchSharedParentPortal('portal_farhan');
+      expect(portal).not.toBeNull();
+      expect(portal.id).toBe('portal_farhan');
+      expect(portal.studentFirstName).toBe('Farhan');
+      expect(portal.phone).toBeUndefined();
+      expect(portal.guardianPhone).toBeUndefined();
+      expect(portal.address).toBeUndefined();
+      expect('phone' in portal).toBe(false);
+      expect('guardianPhone' in portal).toBe(false);
+      expect('address' in portal).toBe(false);
+      expect('undefinedField' in portal).toBe(false);
+      expect(portal.paidTotal).toBe(5000);
+      expect(portal.tutorName).toBe('Sir Newton');
     });
   });
 });

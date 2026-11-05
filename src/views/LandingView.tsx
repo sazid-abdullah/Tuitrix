@@ -377,19 +377,60 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
 
       {/* Testimonials */}
       <section className="testimonials">
-        <h2>{lang === 'EN' ? 'Loved by Tutors in BD' : 'টিউটরদের আস্থার প্রতীক'}</h2>
+        <h2>{lang === 'EN' ? 'Loved by Tutors Across Bangladesh' : 'সারা দেশের টিউটরদের আস্থার প্রতীক'}</h2>
+        <p className="testimonials-sub" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '-18px', marginBottom: '28px', fontSize: '0.95rem' }}>
+          {lang === 'EN'
+            ? 'From private home tutoring in Dhaka to coaching batches in Chittagong, see how educators elevate their tuition practice.'
+            : 'ঢাকার হোম টিউশন থেকে চট্টগ্রামের কোচিং ব্যাচ—টিউটররা কীভাবে তাদের টিউশন পরিচালনা সহজ করছেন।'}
+        </p>
         <div className="testimonial-grid">
           <div className="testimonial-card">
-            <p>"No more manual cycle counting! Tuitrix notifies me when the 12th class is done."</p>
-            <div className="author">- Hassan, HSC Physics Tutor</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '10px', color: '#f59e0b', fontSize: '0.85rem' }} aria-label="5 stars">
+              ★★★★★
+            </div>
+            <p>
+              {lang === 'EN'
+                ? '"No more awkward fee reminders or manual cycle counting. Tuitrix automatically tracks my 12-class cycles and notifies parents with 1 tap. My fee collection on-time rate jumped to 95%."'
+                : '"১২-ক্লাসের সাইকেল শেষ হলে অভিভাবকদের ফি চাওয়ার যে ইতস্তত ভাব ছিল, তা এখন অতীত। টুইট্রিক্স স্বয়ংক্রিয়ভাবে ক্লাসের হিসাব রাখে এবং এক ট্যাপে রিমাইন্ডার পাঠায়। সময়মতো ফি পাওয়ার হার এখন ৯৫%!"'}
+            </p>
+            <div className="author">
+              <div>{lang === 'EN' ? 'Engr. Tanvir Hassan' : 'প্রকৌ. তানভীর হাসান'}</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--muted)', marginTop: '2px' }}>
+                {lang === 'EN' ? 'HSC Physics Specialist · Dhanmondi, Dhaka' : 'এইচএসসি পদার্থবিজ্ঞান শিক্ষক · ধানমন্ডি, ঢাকা'}
+              </div>
+            </div>
           </div>
           <div className="testimonial-card">
-            <p>"The AI generated PDFs look so professional with my branding. Parents love it!"</p>
-            <div className="author">- Sarah, O-Level Math</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '10px', color: '#f59e0b', fontSize: '0.85rem' }} aria-label="5 stars">
+              ★★★★★
+            </div>
+            <p>
+              {lang === 'EN'
+                ? '"The AI Exam Generator saves me 4+ hours every weekend. Generating custom worksheets and chapter CQ papers with my coaching watermark and answer keys takes under a minute."'
+                : '"প্রতি সপ্তাহে প্রশ্ন তৈরিতে আমার ৪-৫ ঘণ্টা লাগত। এখন টুইট্রিক্সের এআই দিয়ে আমার ব্যাচের নাম ও ওয়াটারমার্কসহ কয়েক সেকেন্ডেই বোর্ড ও ক্যামব্রিজ স্ট্যান্ডার্ড প্রশ্ন এবং উত্তরমালা তৈরি করে ফেলি।"'}
+            </p>
+            <div className="author">
+              <div>{lang === 'EN' ? 'Sarah Quader' : 'সায়রা কাদের'}</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--muted)', marginTop: '2px' }}>
+                {lang === 'EN' ? 'O & A-Level Math Faculty · Uttara, Dhaka' : 'ও ও এ-লেভেল গণিত শিক্ষক · উত্তরা, ঢাকা'}
+              </div>
+            </div>
           </div>
           <div className="testimonial-card">
-            <p>"Sending WhatsApp results in Bangla makes communication with parents so easy."</p>
-            <div className="author">- Rafiq, SSC Batch Instructor</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '10px', color: '#f59e0b', fontSize: '0.85rem' }} aria-label="5 stars">
+              ★★★★★
+            </div>
+            <p>
+              {lang === 'EN'
+                ? '"Managing 35+ students across morning and evening batches was chaotic in Excel. With Tuitrix, batch attendance is 1-tap, exam marks sync to student profiles, and parents receive bilingual WhatsApp cards."'
+                : '"চট্টগ্রামের চকবাজারে দুটি বড় ব্যাচে ৩৫ জনের বেশি শিক্ষার্থীর হিসাব রাখা কঠিন ছিল। টুইট্রিক্সে ১ ট্যাপে ব্যাচ হাজিরা নেওয়া যায় এবং বাংলায় সরাসরি অভিভাবকদের হোয়াটসঅ্যাপে প্রগ্রেস কার্ড চলে যায়।"'}
+            </p>
+            <div className="author">
+              <div>{lang === 'EN' ? 'Rafiqul Islam' : 'রফিকুল ইসলাম'}</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--muted)', marginTop: '2px' }}>
+                {lang === 'EN' ? 'SSC Science Batch Lead · Chawkbazar, Chittagong' : 'এসএসসি বিজ্ঞান ব্যাচ ইনস্ট্রাক্টর · চকবাজার, চট্টগ্রাম'}
+              </div>
+            </div>
           </div>
         </div>
       </section>

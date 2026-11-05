@@ -696,4 +696,61 @@ export async function fetchSharedExamResult(resultId: string): Promise<any | nul
   return null;
 }
 
+export async function publishSharedParentPortal(
+  portalId: string,
+  snapshot: any
+): Promise<string> {
+  const sanitized = stripUndefinedDeep(snapshot || {});
+  // Ensure sensitive contact/address fields are strictly excluded
+  const { phone, guardianPhone, address, ...clean } = sanitized;
+  clean.id = portalId;
+  clean.updatedAt = Date.now();
+
+  try {
+    localStorage.setItem(`shared_portal_${portalId}`, JSON.stringify(clean));
+  } catch (e) {
+    console.warn('Failed to cache shared parent portal in localStorage:', e);
+  }
+
+  if (db && auth?.currentUser) {
+    try {
+      await setDoc(doc(db, 'shared_portals', portalId), clean);
+    } catch (e) {
+      console.error('Failed to publish shared parent portal to Firestore:', e);
+      throw e;
+    }
+  }
+
+  return portalId;
+}
+
+export async function fetchSharedParentPortal(portalId: string): Promise<any | null> {
+  if (!portalId) return null;
+
+  try {
+    const local = localStorage.getItem(`shared_portal_${portalId}`);
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (parsed) return parsed;
+    }
+  } catch {}
+
+  if (db) {
+    try {
+      const snap = await getDoc(doc(db, 'shared_portals', portalId));
+      if (snap.exists()) {
+        const data = snap.data();
+        try {
+          localStorage.setItem(`shared_portal_${portalId}`, JSON.stringify(data));
+        } catch {}
+        return data;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch shared parent portal from Firestore:', e);
+    }
+  }
+
+  return null;
+}
+
 export { app, auth, db, analytics, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail };

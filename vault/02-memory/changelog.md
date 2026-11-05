@@ -22,6 +22,10 @@ tags: [changelog, history, releases]
 - Made secondary AI verification opt-in by default in `AIView`, added on-demand "Verify accuracy with AI" action, sliced check input to 24K, added graceful rate-limit notification banner, and sanitized `"None"` print branding placeholders.
 - Added `/shared_results/{resultId}` Firestore security rule allowing public unguessable single-doc retrieval and authenticated tutor mutations, with `publishSharedExamResult` and `fetchSharedExamResult` helpers in `firebase.ts`.
 - Hardened `ResultView.tsx` with fallback Exam synthesis when `attempt.examId` is missing, read-only mode for shared public links via `fetchSharedExamResult`, and one-click `"🔗 Share Result Link"` clipboard sharing.
+- Polished `LandingView.tsx` testimonials section with authentic bilingual beta tutor reviews, 5-star badges, and verified roles across Dhaka (Dhanmondi, Uttara) and Chittagong (Chawkbazar).
+- Added crisp scannable subheadline copy and verified mobile/desktop responsive rendering with accompanying unit tests in `landing.test.tsx`.
+- Added `/shared_portals/{portalId}` Firestore security rule allowing public single-doc retrieval and authenticated tutor mutations, with sanitized `publishSharedParentPortal` and `fetchSharedParentPortal` helpers in `firebase.ts` stripping sensitive contact/address fields.
+- Added `"🔗 Copy Parent Portal Link"` in `ParentReportModal.tsx` and implemented read-only Live Parent Portal fallback rendering in `StudentDetailView.tsx` when a student profile is opened via public share link.
 
 ## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
 - Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { useStore } from '../store/context';
 import { fmtDate, fmtTime } from '../utils/date';
@@ -6,6 +6,7 @@ import { Student, Lesson } from '../types';
 import { contractStatus, studentBalance } from '../store/contracts';
 import { statusBadge } from '../views/HomeView';
 import { generateWhatsAppMessage } from '../utils/whatsapp';
+import { publishSharedParentPortal } from '../services/firebase';
 
 interface ParentReportModalProps {
   isOpen: boolean;
@@ -15,7 +16,8 @@ interface ParentReportModalProps {
 
 export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, onClose, student }) => {
   const { state, money, toast } = useStore();
-  const [waLang, setWaLang] = React.useState<'en' | 'bn'>('en');
+  const [waLang, setWaLang] = useState<'en' | 'bn'>('en');
+  const [copyingLink, setCopyingLink] = useState(false);
 
   const lessons = useMemo(() => {
     return state.lessons
@@ -39,6 +41,49 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleCopyPortalLink = async () => {
+    setCopyingLink(true);
+    try {
+      await publishSharedParentPortal(student.id, {
+        id: student.id,
+        studentFirstName: student.name.split(' ')[0] || student.name,
+        grade: student.grade,
+        curriculum: student.curriculum,
+        subjects: student.subjects || [],
+        tutorName: state.settings.tutorName || 'Private Tutor',
+        cycleSummary: activeContract
+          ? (activeContract.cycleType === 'classes' && cStatus
+              ? `${cStatus.taught - (cStatus.completed * activeContract.cycleLength)} / ${activeContract.cycleLength} Classes`
+              : activeContract.title)
+          : 'No active contract',
+        paidTotal,
+        totalDue,
+        currency: state.settings.currency || '৳',
+        examScores: (student.examScores || []).slice(0, 5),
+        lessons: lessons.slice(0, 15).map(l => ({
+          id: l.id,
+          date: l.date,
+          time: l.time,
+          status: l.status,
+          subject: l.subject,
+          topics: l.topics,
+          duration: l.duration,
+          homework: l.homework,
+        })),
+      });
+
+      const portalUrl = `${window.location.origin}${window.location.pathname}#/student/${student.id}`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(portalUrl);
+      }
+      toast('Live Parent Portal link copied!', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to generate Parent Portal link', 'error');
+    } finally {
+      setCopyingLink(false);
+    }
   };
 
   const handleSendWhatsApp = () => {
@@ -202,8 +247,11 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
           )}
         </div>
 
-        <div className="actions" style={{ marginTop: '32px' }}>
+        <div className="actions" style={{ marginTop: '32px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           <button className="btn primary" onClick={handlePrint}>Print / Save as PDF</button>
+          <button className="btn" onClick={handleCopyPortalLink} disabled={copyingLink}>
+            {copyingLink ? 'Generating link…' : '🔗 Copy Parent Portal Link'}
+          </button>
           <button className="btn" onClick={handleSendWhatsApp}>💬 WhatsApp ({waLang === 'en' ? 'EN' : 'বাংলা'})</button>
           <button className="btn ghost" onClick={() => setWaLang(waLang === 'en' ? 'bn' : 'en')} title="Toggle Language">🌐</button>
         </div>

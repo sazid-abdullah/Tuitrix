@@ -57,4 +57,25 @@ describe('LandingView', () => {
     fireEvent.click(signinBtns[0]);
     expect(onSignIn).toHaveBeenCalledTimes(1);
   });
+
+  it('renders refined bilingual tutor testimonials with roles and locations', async () => {
+    await act(async () => {
+      render(<LandingView onEnterApp={vi.fn()} onSignIn={vi.fn()} />);
+    });
+
+    // EN Default
+    expect(screen.getByText(/HSC Physics Specialist · Dhanmondi, Dhaka/i)).toBeInTheDocument();
+    expect(screen.getByText(/O & A-Level Math Faculty · Uttara, Dhaka/i)).toBeInTheDocument();
+    expect(screen.getByText(/SSC Science Batch Lead · Chawkbazar, Chittagong/i)).toBeInTheDocument();
+
+    // Switch to BN
+    const toggle = screen.getByText('বাংলা');
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+
+    expect(screen.getByText(/এইচএসসি পদার্থবিজ্ঞান শিক্ষক · ধানমন্ডি, ঢাকা/i)).toBeInTheDocument();
+    expect(screen.getByText(/ও ও এ-লেভেল গণিত শিক্ষক · উত্তরা, ঢাকা/i)).toBeInTheDocument();
+    expect(screen.getByText(/এসএসসি বিজ্ঞান ব্যাচ ইনস্ট্রাক্টর · চকবাজার, চট্টগ্রাম/i)).toBeInTheDocument();
+  });
 });

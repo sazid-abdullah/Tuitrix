@@ -8,8 +8,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { UploadPaperModal } from '../components/UploadPaperModal';
 import { ImportDocModal } from '../components/ImportDocModal';
 import { ParentReportModal } from '../components/ParentReportModal';
+import { StudentDetailView } from '../views/StudentDetailView';
 import * as context from '../store/context';
 import * as aiServices from '../services/ai';
+
+const mockPublishSharedPortal = vi.fn((portalId: string, snapshot: any) => Promise.resolve(portalId));
+const mockFetchSharedPortal = vi.fn((portalId: string) => Promise.resolve<any>(null));
 
 vi.mock('../services/firebase', () => ({
   app: {},
@@ -26,6 +30,8 @@ vi.mock('../services/firebase', () => ({
   createUserWithEmailAndPassword: vi.fn(),
   signOut: vi.fn(),
   fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 99, freeStudentLimit: 15 })),
+  publishSharedParentPortal: (portalId: string, snapshot: any) => mockPublishSharedPortal(portalId, snapshot),
+  fetchSharedParentPortal: (portalId: string) => mockFetchSharedPortal(portalId),
 }));
 
 describe('UploadPaperModal - Student Sync, Quota & Markdown Reconstruction', () => {
@@ -405,5 +411,134 @@ describe('ParentReportModal - Accurate studentBalance & Valid CSS Tokens', () =>
 
     const el50 = screen.getByText('50%');
     expect(el50).toHaveStyle({ color: 'var(--red)' });
+  });
+
+  it('publishes parent portal snapshot and copies link when "🔗 Copy Parent Portal Link" is clicked', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    const mockStudent = {
+      id: 'std_portal_1',
+      name: 'Tanvir Ahmed',
+      grade: 'HSC',
+      curriculum: 'NCTB',
+      subjects: ['Physics'],
+      phone: '01711111111',
+      guardianPhone: '01811111111',
+      address: 'Dhanmondi, Dhaka',
+      examScores: [
+        { id: 'es1', title: 'Midterm', subject: 'Physics', date: '2026-02-01', obtainedMarks: 80, totalMarks: 100 }
+      ],
+    };
+
+    const mockStore = {
+      state: {
+        settings: { tutorName: 'Engr. Sazid', currency: '৳' },
+        contracts: [],
+        lessons: [
+          { id: 'l1', studentId: 'std_portal_1', date: '2026-02-01', status: 'taught', subject: 'Physics' }
+        ],
+        payments: [],
+      },
+      money: (n: number) => `৳${n}`,
+      toast: vi.fn(),
+    };
+    vi.spyOn(context, 'useStore').mockReturnValue(mockStore as any);
+
+    render(
+      <ParentReportModal
+        isOpen={true}
+        onClose={vi.fn()}
+        student={mockStudent as any}
+      />
+    );
+
+    const copyBtn = screen.getByText('🔗 Copy Parent Portal Link');
+    fireEvent.click(copyBtn);
+
+    await waitFor(() => {
+      expect(mockPublishSharedPortal).toHaveBeenCalledWith(
+        'std_portal_1',
+        expect.objectContaining({
+          id: 'std_portal_1',
+          studentFirstName: 'Tanvir',
+          grade: 'HSC',
+          tutorName: 'Engr. Sazid',
+        })
+      );
+      expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('#/student/std_portal_1'));
+      expect(mockStore.toast).toHaveBeenCalledWith('Live Parent Portal link copied!', 'success');
+    });
+  });
+
+  it('renders read-only Live Parent Portal card in StudentDetailView when student is not in store', async () => {
+    const mockStore = {
+      state: {
+        contracts: [],
+        lessons: [],
+        payments: [],
+        docs: [],
+        attempts: [],
+        settings: { tutorName: 'Private Tutor' },
+      },
+      getStudent: vi.fn(() => undefined), // Not found in store!
+      money: (n: number) => `৳${n}`,
+      toast: vi.fn(),
+    };
+    vi.spyOn(context, 'useStore').mockReturnValue(mockStore as any);
+
+    mockFetchSharedPortal.mockResolvedValueOnce({
+      id: 'std_portal_shared',
+      studentFirstName: 'Sadia',
+      grade: 'Class 10',
+      curriculum: 'English Version',
+      subjects: ['Biology', 'Chemistry'],
+      tutorName: 'Dr. Nabila',
+      cycleSummary: '8 / 12 Classes',
+      paidTotal: 8000,
+      totalDue: 2000,
+      currency: '৳',
+      examScores: [
+        { id: 'ex1', title: 'Genetics Quiz', subject: 'Biology', date: '2026-02-10', obtainedMarks: 22, totalMarks: 25, remarks: 'Excellent' }
+      ],
+      lessons: [
+        { id: 'les1', date: '2026-02-05', status: 'taught', subject: 'Biology', topics: 'DNA Replication', duration: 75, homework: 'Draw double helix' }
+      ],
+    });
+
+    render(
+      <StudentDetailView
+        studentId="std_portal_shared"
+        onNavigate={vi.fn()}
+        onEditStudent={vi.fn()}
+        onAddContract={vi.fn()}
+        onEditContract={vi.fn()}
+        onLogLesson={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onUploadPaper={vi.fn()}
+      />
+    );
+
+    // Wait for portal to load
+    const heading = await screen.findByText('Sadia');
+    expect(heading).toBeInTheDocument();
+    expect(screen.getByText('Live Parent Portal')).toBeInTheDocument();
+    expect(screen.getByText(/Tutor:/)).toBeInTheDocument();
+    expect(screen.getByText('Dr. Nabila')).toBeInTheDocument();
+    expect(screen.getByText('8 / 12 Classes')).toBeInTheDocument();
+    expect(screen.getByText('Genetics Quiz')).toBeInTheDocument();
+    expect(screen.getByText('DNA Replication')).toBeInTheDocument();
+    expect(screen.getByText('🖨️ Print Report')).toBeInTheDocument();
+
+    // Verify zero editing buttons and zero phone/address fields
+    expect(screen.queryByText(/Edit Student/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Delete Student/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Log Class/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Record Payment/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('01711111111')).not.toBeInTheDocument();
   });
 });

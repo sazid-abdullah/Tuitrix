@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/context';
 import { SectionGuidePopover } from '../components/SectionGuidePopover';
 import { renderAvatar, statusBadge } from './HomeView';
@@ -8,6 +8,7 @@ import { fmtDate, fmtTime, toISO, fmtN, todayISO } from '../utils/date';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ParentReportModal } from '../components/ParentReportModal';
 import { generateWhatsAppMessage } from '../utils/whatsapp';
+import { fetchSharedParentPortal } from '../services/firebase';
 import { Student, Lesson, Contract, Payment, ExamScore } from '../types';
 
 interface StudentDetailViewProps {
@@ -49,6 +50,176 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   });
 
   const student = getStudent(studentId);
+  const [sharedPortal, setSharedPortal] = useState<any | null>(null);
+  const [loadingPortal, setLoadingPortal] = useState<boolean>(!student);
+
+  useEffect(() => {
+    if (student) {
+      setLoadingPortal(false);
+      return;
+    }
+    let isMounted = true;
+    setLoadingPortal(true);
+    fetchSharedParentPortal(studentId)
+      .then(data => {
+        if (isMounted) {
+          if (data) {
+            setSharedPortal(data);
+          }
+          setLoadingPortal(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setLoadingPortal(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [studentId, student]);
+
+  if (loadingPortal) {
+    return (
+      <div className="card empty" style={{ textAlign: 'center', padding: '40px' }}>
+        <span className="spinner" style={{ marginRight: '8px' }} /> Loading Parent Portal…
+      </div>
+    );
+  }
+
+  if (!student && sharedPortal) {
+    return (
+      <div className="parent-portal-view" style={{ maxWidth: '800px', margin: '0 auto', padding: '16px' }}>
+        <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <h1 style={{ margin: 0 }}>{sharedPortal.studentFirstName}</h1>
+                <span className="badge green">Live Parent Portal</span>
+              </div>
+              <div className="muted small" style={{ marginTop: '6px' }}>
+                {[sharedPortal.grade, sharedPortal.curriculum, (sharedPortal.subjects || []).join(', ')].filter(Boolean).join(' · ')}
+              </div>
+              <div className="muted small" style={{ marginTop: '4px' }}>
+                Tutor: <strong>{sharedPortal.tutorName || 'Private Tutor'}</strong>
+              </div>
+            </div>
+            <button type="button" className="btn ghost" onClick={() => window.print()}>
+              🖨️ Print Report
+            </button>
+          </div>
+
+          <div className="grid-2" style={{ marginTop: '24px', gap: '16px' }}>
+            <div className="card" style={{ background: 'var(--card2)', border: '1px solid var(--border)' }}>
+              <div className="label muted small">Tuition Cycle</div>
+              <div style={{ marginTop: '6px' }}>
+                <span className="badge">{sharedPortal.cycleSummary || 'Active Contract'}</span>
+              </div>
+            </div>
+            <div className="card" style={{ background: 'var(--card2)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: '20px' }}>
+                <div>
+                  <div className="label muted small">Total Paid</div>
+                  <div className="pos" style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '4px' }}>
+                    {sharedPortal.currency || '৳'} {fmtN(sharedPortal.paidTotal || 0)}
+                  </div>
+                </div>
+                <div>
+                  <div className="label muted small">Total Due</div>
+                  <div
+                    className={sharedPortal.totalDue > 0 ? 'neg' : 'pos'}
+                    style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '4px' }}
+                  >
+                    {sharedPortal.currency || '৳'} {fmtN(sharedPortal.totalDue || 0)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Exam Performance */}
+        {sharedPortal.examScores && sharedPortal.examScores.length > 0 && (
+          <div className="card" style={{ marginBottom: '24px' }}>
+            <h3 style={{ marginTop: 0 }}>Recent Exam Performance</h3>
+            <div style={{ overflowX: 'auto', marginTop: '12px' }}>
+              <table className="table" style={{ minWidth: '450px' }}>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Exam / Subject</th>
+                    <th>Marks</th>
+                    <th>Score (%)</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sharedPortal.examScores.map((s: any, idx: number) => {
+                    const percent = s.totalMarks > 0 ? Math.round((s.obtainedMarks / s.totalMarks) * 100) : 0;
+                    return (
+                      <tr key={s.id || idx}>
+                        <td>{fmtDate(s.date)}</td>
+                        <td>
+                          <strong>{s.title}</strong>
+                          {s.subject && <div className="small muted">{s.subject}</div>}
+                        </td>
+                        <td>{s.obtainedMarks} / {s.totalMarks}</td>
+                        <td>
+                          <span style={{ color: percent >= 80 ? 'var(--green)' : percent >= 60 ? 'var(--yellow)' : 'var(--red)', fontWeight: 'bold' }}>
+                            {percent}%
+                          </span>
+                        </td>
+                        <td>{s.remarks ? <span className="small">{s.remarks}</span> : <span className="muted">-</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Recent Lessons */}
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Verified Class Progress</h3>
+          {(!sharedPortal.lessons || sharedPortal.lessons.length === 0) ? (
+            <p className="muted small">No verified classes recorded yet.</p>
+          ) : (
+            <div style={{ overflowX: 'auto', marginTop: '12px' }}>
+              <table className="table" style={{ minWidth: '450px' }}>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Topic / Subject</th>
+                    <th>Duration</th>
+                    <th>Homework</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sharedPortal.lessons.map((l: any, idx: number) => (
+                    <tr key={l.id || idx}>
+                      <td>
+                        {fmtDate(l.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {l.time && <span className="muted small" style={{ display: 'block' }}>{fmtTime(l.time)}</span>}
+                      </td>
+                      <td>{statusBadge(l.status)}</td>
+                      <td>
+                        {l.subject && <strong>{l.subject}</strong>}
+                        {l.subject && l.topics && <br />}
+                        {l.topics && <span className="small muted">{l.topics}</span>}
+                      </td>
+                      <td>{l.duration ? `${l.duration}m` : '-'}</td>
+                      <td>{l.homework ? <span className="small">{l.homework}</span> : <span className="muted">-</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!student) {
     return (
       <div className="card empty">

@@ -20,6 +20,12 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null;
     }
 
+    // Public sanitized shared parent portals (single doc read by unguessable id, writable by authenticated tutors)
+    match /shared_portals/{portalId} {
+      allow get: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
     // bKash / Nagad / Rocket TrxID Pro upgrade requests
     match /upgrade_requests/{docId} {
       allow create, update: if request.auth != null && (request.auth.uid == docId || request.auth.uid == request.resource.data.uid);
