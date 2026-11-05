@@ -164,8 +164,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
         <div className="hero-content">
           <h1>
             {lang === 'EN'
-              ? 'The #1 Smart Tuition, Batch & AI Exam Manager for Tutors in Bangladesh'
-              : 'বাংলাদেশের টিউটর ও কোচিং শিক্ষকদের জন্য ১ নম্বর স্মার্ট টিউশন ও ব্যাচ ম্যানেজার'}
+              ? 'Smart Tuition, Batch & AI Exam Manager for Tutors in Bangladesh'
+              : 'বাংলাদেশের টিউটর ও কোচিং শিক্ষকদের জন্য স্মার্ট টিউশন ও ব্যাচ ম্যানেজার'}
           </h1>
           <p className="hero-sub">
             {lang === 'EN'
@@ -394,10 +394,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
                 : '"১২-ক্লাসের সাইকেল শেষ হলে অভিভাবকদের ফি চাওয়ার যে ইতস্তত ভাব ছিল, তা এখন অতীত। টুইট্রিক্স স্বয়ংক্রিয়ভাবে ক্লাসের হিসাব রাখে এবং এক ট্যাপে রিমাইন্ডার পাঠায়। সময়মতো ফি পাওয়ার হার এখন ৯৫%!"'}
             </p>
             <div className="author">
-              <div>{lang === 'EN' ? 'Engr. Tanvir Hassan' : 'প্রকৌ. তানভীর হাসান'}</div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--muted)', marginTop: '2px' }}>
-                {lang === 'EN' ? 'HSC Physics Specialist · Dhanmondi, Dhaka' : 'এইচএসসি পদার্থবিজ্ঞান শিক্ষক · ধানমন্ডি, ঢাকা'}
-              </div>
+              {lang === 'EN' ? 'HSC Physics Specialist · Dhanmondi, Dhaka' : 'এইচএসসি পদার্থবিজ্ঞান শিক্ষক · ধানমন্ডি, ঢাকা'}
             </div>
           </div>
           <div className="testimonial-card">
@@ -410,10 +407,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
                 : '"প্রতি সপ্তাহে প্রশ্ন তৈরিতে আমার ৪-৫ ঘণ্টা লাগত। এখন টুইট্রিক্সের এআই দিয়ে আমার ব্যাচের নাম ও ওয়াটারমার্কসহ কয়েক সেকেন্ডেই বোর্ড ও ক্যামব্রিজ স্ট্যান্ডার্ড প্রশ্ন এবং উত্তরমালা তৈরি করে ফেলি।"'}
             </p>
             <div className="author">
-              <div>{lang === 'EN' ? 'Sarah Quader' : 'সায়রা কাদের'}</div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--muted)', marginTop: '2px' }}>
-                {lang === 'EN' ? 'O & A-Level Math Faculty · Uttara, Dhaka' : 'ও ও এ-লেভেল গণিত শিক্ষক · উত্তরা, ঢাকা'}
-              </div>
+              {lang === 'EN' ? 'O & A-Level Math Faculty · Uttara, Dhaka' : 'ও ও এ-লেভেল গণিত শিক্ষক · উত্তরা, ঢাকা'}
             </div>
           </div>
           <div className="testimonial-card">
@@ -426,10 +420,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp, onSignIn, 
                 : '"চট্টগ্রামের চকবাজারে দুটি বড় ব্যাচে ৩৫ জনের বেশি শিক্ষার্থীর হিসাব রাখা কঠিন ছিল। টুইট্রিক্সে ১ ট্যাপে ব্যাচ হাজিরা নেওয়া যায় এবং বাংলায় সরাসরি অভিভাবকদের হোয়াটসঅ্যাপে প্রগ্রেস কার্ড চলে যায়।"'}
             </p>
             <div className="author">
-              <div>{lang === 'EN' ? 'Rafiqul Islam' : 'রফিকুল ইসলাম'}</div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--muted)', marginTop: '2px' }}>
-                {lang === 'EN' ? 'SSC Science Batch Lead · Chawkbazar, Chittagong' : 'এসএসসি বিজ্ঞান ব্যাচ ইনস্ট্রাক্টর · চকবাজার, চট্টগ্রাম'}
-              </div>
+              {lang === 'EN' ? 'SSC Science Batch Lead · Chawkbazar, Chittagong' : 'এসএসসি বিজ্ঞান ব্যাচ ইনস্ট্রাক্টর · চকবাজার, চট্টগ্রাম'}
             </div>
           </div>
         </div>

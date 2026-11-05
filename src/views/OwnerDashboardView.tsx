@@ -20,6 +20,14 @@ interface OwnerDashboardViewProps {
   onNavigate: (route: string, param?: string) => void;
 }
 
+export function formatPromoBannerText(promo: PromoCode): string {
+  const disc = promo.discountType === 'flat'
+    ? `৳${promo.discountValue || promo.discountPercent} OFF`
+    : `${promo.discountValue || promo.discountPercent}% OFF`;
+  const cap = promo.maxUses && promo.maxUses > 0 ? ` (First ${promo.maxUses} users)` : '';
+  return `🎉 CODE: "${promo.code}" — ${disc}${cap}`;
+}
+
 export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNavigate }) => {
   const { toast } = useStore();
   const [isAuthorizedOwner, setIsAuthorizedOwner] = useState<boolean>(() => {
@@ -220,6 +228,23 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
       } catch (err: any) {
         toast('Failed to delete promo code', 'error');
       }
+    }
+  };
+
+  const handleSetPromoBanner = async (promo: PromoCode) => {
+    const banner = formatPromoBannerText(promo);
+    const updated: PricingConfig = {
+      ...pricingConfig,
+      promoText: banner,
+      updatedAt: Date.now(),
+    };
+    setPricingConfig(updated);
+    setPricingForm(prev => ({ ...prev, promoText: banner }));
+    try {
+      await updatePricingConfig(updated);
+      toast(`Banner updated to "${banner}"`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to update banner', 'error');
     }
   };
 
@@ -888,7 +913,17 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
                           </button>
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            {promo.active && (
+                              <button
+                                type="button"
+                                className="btn outline small"
+                                onClick={() => handleSetPromoBanner(promo)}
+                                title="Set as live checkout announcement banner"
+                              >
+                                📢 Set as Banner
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="btn outline small"

@@ -26,6 +26,8 @@ tags: [changelog, history, releases]
 - Added crisp scannable subheadline copy and verified mobile/desktop responsive rendering with accompanying unit tests in `landing.test.tsx`.
 - Added `/shared_portals/{portalId}` Firestore security rule allowing public single-doc retrieval and authenticated tutor mutations, with sanitized `publishSharedParentPortal` and `fetchSharedParentPortal` helpers in `firebase.ts` stripping sensitive contact/address fields.
 - Added `"🔗 Copy Parent Portal Link"` in `ParentReportModal.tsx` and implemented read-only Live Parent Portal fallback rendering in `StudentDetailView.tsx` when a student profile is opened via public share link.
+- Updated `LandingView` hero headline to compliant phrasing without subjective superlative claims and updated testimonials to role + location attributions with zero invented names.
+- Exported `formatPromoBannerText` helper in `OwnerDashboardView` and added "📢 Set as Banner" button in Promo Studio to instantly sync active promo codes to the live checkout announcement banner.
 
 ## [2026-11-03] — Debounce Persistence Hardening & ErrorBoundary Route Auto-Reset
 - Flushed pending `STORE_KEY` debounced state to `localStorage` on `pagehide`/`beforeunload` and cleared pending timers on auth change/logout to guarantee zero data loss and prevent state bleed.

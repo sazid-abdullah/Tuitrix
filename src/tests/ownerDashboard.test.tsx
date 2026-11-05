@@ -43,7 +43,7 @@ vi.mock('firebase/auth', async (importOriginal) => {
 });
 
 import { fetchPlatformTelemetry, updatePricingConfig, DEFAULT_PRICING } from '../services/firebase';
-import { OwnerDashboardView } from '../views/OwnerDashboardView';
+import { OwnerDashboardView, formatPromoBannerText } from '../views/OwnerDashboardView';
 import * as context from '../store/context';
 
 describe('fetchPlatformTelemetry - Promo Telemetry & Approved Revenue', () => {
@@ -233,5 +233,56 @@ describe('OwnerDashboardView - Pricing & Free Student Limit', () => {
     });
 
     expect(screen.getByText('Access Denied')).toBeInTheDocument();
+  });
+});
+
+describe('formatPromoBannerText', () => {
+  it('formats flat and percent discounts with and without maxUses limits', () => {
+    // Percent discount with limited uses
+    expect(
+      formatPromoBannerText({
+        code: 'FLASH50',
+        discountType: 'percent',
+        discountPercent: 50,
+        discountValue: 50,
+        active: true,
+        maxUses: 50,
+      })
+    ).toBe('🎉 CODE: "FLASH50" — 50% OFF (First 50 users)');
+
+    // Flat discount without cap
+    expect(
+      formatPromoBannerText({
+        code: 'EID2026',
+        discountType: 'flat',
+        discountValue: 150,
+        discountPercent: 0,
+        active: true,
+      })
+    ).toBe('🎉 CODE: "EID2026" — ৳150 OFF');
+
+    // Flat discount with limited uses
+    expect(
+      formatPromoBannerText({
+        code: 'PROMO100',
+        discountType: 'flat',
+        discountValue: 100,
+        discountPercent: 0,
+        active: true,
+        maxUses: 10,
+      })
+    ).toBe('🎉 CODE: "PROMO100" — ৳100 OFF (First 10 users)');
+
+    // Percent discount with maxUses 0 (unlimited)
+    expect(
+      formatPromoBannerText({
+        code: 'WELCOME10',
+        discountType: 'percent',
+        discountPercent: 10,
+        discountValue: 10,
+        active: true,
+        maxUses: 0,
+      })
+    ).toBe('🎉 CODE: "WELCOME10" — 10% OFF');
   });
 });

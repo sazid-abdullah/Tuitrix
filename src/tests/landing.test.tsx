@@ -19,12 +19,12 @@ describe('LandingView', () => {
     await act(async () => { await act(async () => { await act(async () => { render(<LandingView onEnterApp={vi.fn()} onSignIn={vi.fn()} />); }); }); });
 
     // EN default
-    expect(screen.getByText('The #1 Smart Tuition, Batch & AI Exam Manager for Tutors in Bangladesh')).toBeInTheDocument();
+    expect(screen.getByText('Smart Tuition, Batch & AI Exam Manager for Tutors in Bangladesh')).toBeInTheDocument();
 
     // Switch to BN
     const toggle = screen.getByText('বাংলা');
     fireEvent.click(toggle);
-    expect(screen.getByText('বাংলাদেশের টিউটর ও কোচিং শিক্ষকদের জন্য ১ নম্বর স্মার্ট টিউশন ও ব্যাচ ম্যানেজার')).toBeInTheDocument();
+    expect(screen.getByText('বাংলাদেশের টিউটর ও কোচিং শিক্ষকদের জন্য স্মার্ট টিউশন ও ব্যাচ ম্যানেজার')).toBeInTheDocument();
   });
 
   it('renders interactive showcase tabs', async () => {
