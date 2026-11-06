@@ -453,7 +453,19 @@ export const App: React.FC = () => {
             onNavigate={navigate}
             onStartExam={async (doc: SavedDoc) => {
               try {
-                let existingExam = state.exams.find(e => e.docId === doc.id || e.id === doc.id || (e.title && e.title.trim() === doc.title.trim()));
+                if (doc.content?.trim().startsWith('%PDF-')) {
+                  toast("This document contains raw binary PDF data. Please upload it via 'Upload question paper' so AI Vision can extract all questions.", 'error');
+                  return;
+                }
+
+                const isDummyExam = (ex: any) => {
+                  if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) return true;
+                  if (ex.questions.length === 1 && /sample mcq|question text/i.test(ex.questions[0]?.text || '')) return true;
+                  return false;
+                };
+                let existingExam = state.exams.find(e => 
+                  (e.docId === doc.id || e.id === doc.id || (e.title && e.title.trim() === doc.title.trim())) && !isDummyExam(e)
+                );
                 if (!existingExam) {
                   toast('Preparing interactive exam questions with AI…', 'info');
                   const { cleanText, mediaMap } = extractAndPlaceholderMedia(doc.content);
@@ -463,6 +475,9 @@ export const App: React.FC = () => {
                     onFallback: (msg) => toast(msg, 'info'),
                   });
                   const parsed = normalizeExam(restoreMediaPlaceholders(parseAiJson(rawJson), mediaMap));
+                  if (parsed.questions.length === 0) {
+                    throw new Error('AI could not extract valid questions from this document. Please ensure the paper has numbered questions.');
+                  }
                   const newExam = {
                     ...parsed,
                     id: uid(),

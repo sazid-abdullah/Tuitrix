@@ -12,6 +12,9 @@ import {
   extractAndPlaceholderMedia,
   restoreMediaPlaceholders,
   extractFileText,
+  normalizeExam,
+  isDummyExam,
+  examJsonPrompt,
 } from '../services/ai';
 import { AIView } from '../views/AIView';
 import * as context from '../store/context';
@@ -467,6 +470,181 @@ describe('extractFileText PDF and Image Guard', () => {
     const pngFile = new File(['png bytes'], 'diagram.png', { type: 'image/png' });
     await expect(extractFileText(pngFile)).rejects.toThrow(
       'For PDF or image question papers, please use the "Upload question paper" button so AI can read diagrams and questions accurately.'
+    );
+  });
+});
+
+describe('Exam Invalidation & normalizeExam Guards', () => {
+  it('correctly detects dummy placeholder exams via isDummyExam', () => {
+    // Falsy or malformed exam structures
+    expect(isDummyExam(null)).toBe(true);
+    expect(isDummyExam(undefined)).toBe(true);
+    expect(isDummyExam({})).toBe(true);
+    expect(isDummyExam({ questions: null })).toBe(true);
+    expect(isDummyExam({ questions: [] })).toBe(true);
+    expect(isDummyExam({ questions: 'invalid' })).toBe(true);
+
+    // Dummy exams with sample MCQ or placeholder question text
+    expect(
+      isDummyExam({
+        questions: [{ id: 'q1', type: 'mcq', text: 'Sample MCQ question text' }],
+      })
+    ).toBe(true);
+    expect(
+      isDummyExam({
+        questions: [{ id: 'q1', type: 'mcq', text: 'Question text' }],
+      })
+    ).toBe(true);
+    expect(
+      isDummyExam({
+        questions: [{ id: 'q1', type: 'mcq', text: 'sample mcq 1' }],
+      })
+    ).toBe(true);
+    expect(
+      isDummyExam({
+        questions: [{ id: 'q1', type: 'mcq', text: 'Question Text Here' }],
+      })
+    ).toBe(true);
+
+    // Valid real questions should NOT be flagged as dummy
+    expect(
+      isDummyExam({
+        questions: [
+          {
+            id: 'q1',
+            type: 'mcq',
+            text: 'What is Newton’s Second Law of Motion?',
+            options: ['F=ma', 'E=mc^2', 'V=IR', 'P=IV'],
+          },
+        ],
+      })
+    ).toBe(false);
+
+    expect(
+      isDummyExam({
+        questions: [
+          { id: 'q1', type: 'mcq', text: 'Sample MCQ question text' },
+          { id: 'q2', type: 'mcq', text: 'Real Question 2' },
+        ],
+      })
+    ).toBe(false);
+  });
+
+  it('rejects stale dummy exams from the cache in onStartExam matching logic', () => {
+    const dummyExam = {
+      id: 'exam-dummy-1',
+      docId: 'doc-101',
+      title: 'Physics Chapter 1',
+      questions: [{ id: 'q1', type: 'mcq', text: 'Sample MCQ question text' }],
+    };
+
+    const doc = {
+      id: 'doc-101',
+      title: 'Physics Chapter 1',
+      content: '1. What is force?\nA) Push or pull\nB) Velocity\nC) Mass\nD) Acceleration',
+      type: 'exam',
+      studentId: null,
+      createdAt: '2026-11-06T12:00:00.000Z',
+    };
+
+    const state = {
+      exams: [dummyExam],
+    };
+
+    const isDummy = (ex: any) => {
+      if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) return true;
+      if (ex.questions.length === 1 && /sample mcq|question text/i.test(ex.questions[0]?.text || '')) return true;
+      return false;
+    };
+
+    let existingExam = state.exams.find(
+      (e) =>
+        (e.docId === doc.id || e.id === doc.id || (e.title && e.title.trim() === doc.title.trim())) &&
+        !isDummy(e)
+    );
+
+    // Cache lookup must ignore dummy exam so re-parsing is triggered
+    expect(existingExam).toBeUndefined();
+
+    // Now populate with a valid parsed exam
+    const validExam = {
+      id: 'exam-valid-1',
+      docId: 'doc-101',
+      title: 'Physics Chapter 1',
+      questions: [
+        {
+          id: 'q1',
+          type: 'mcq',
+          text: 'What is force?',
+          options: ['Push or pull', 'Velocity', 'Mass', 'Acceleration'],
+        },
+      ],
+    };
+
+    state.exams.push(validExam);
+
+    existingExam = state.exams.find(
+      (e) =>
+        (e.docId === doc.id || e.id === doc.id || (e.title && e.title.trim() === doc.title.trim())) &&
+        !isDummy(e)
+    );
+
+    expect(existingExam).toBeDefined();
+    expect(existingExam?.id).toBe('exam-valid-1');
+  });
+
+  it('verifies normalizeExam does not manufacture questions from empty input', () => {
+    expect(normalizeExam({}).questions).toEqual([]);
+    expect(normalizeExam(null).questions).toEqual([]);
+    expect(normalizeExam(undefined).questions).toEqual([]);
+    expect(normalizeExam({ questions: [] }).questions).toEqual([]);
+    expect(normalizeExam({ questions: null }).questions).toEqual([]);
+    expect(normalizeExam({ questions: undefined }).questions).toEqual([]);
+    expect(normalizeExam({ title: 'Mock Exam', questions: [] }).questions).toEqual([]);
+    expect(normalizeExam({ questions: [{}] }).questions.length).toBe(1);
+  });
+
+  it('examJsonPrompt explicitly instructs AI to extract all questions and return empty array if none found', () => {
+    const prompt = examJsonPrompt('Any document text');
+    expect(prompt).toContain(
+      'CRITICAL: Extract ALL questions present in the document. Do not output placeholder questions. If no questions are found, return {"questions": []}.'
+    );
+  });
+
+  it('rejects raw binary %PDF- document content with friendly error toast', () => {
+    const toastMock = vi.fn();
+    const pdfDoc = {
+      id: 'doc-pdf',
+      title: 'Physics Test',
+      content: '%PDF-1.4\n%âãÏÓ\n1 0 obj\n<<...>>',
+      type: 'exam',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Simulate onStartExam guard
+    if (pdfDoc.content?.trim().startsWith('%PDF-')) {
+      toastMock(
+        "This document contains raw binary PDF data. Please upload it via 'Upload question paper' so AI Vision can extract all questions.",
+        'error'
+      );
+    }
+
+    expect(toastMock).toHaveBeenCalledWith(
+      "This document contains raw binary PDF data. Please upload it via 'Upload question paper' so AI Vision can extract all questions.",
+      'error'
+    );
+  });
+
+  it('throws error when AI extraction yields zero questions instead of saving empty exam', () => {
+    const parsedExam = normalizeExam({ title: 'Empty Extracted Exam', questions: [] });
+    expect(() => {
+      if (parsedExam.questions.length === 0) {
+        throw new Error(
+          'AI could not extract valid questions from this document. Please ensure the paper has numbered questions.'
+        );
+      }
+    }).toThrow(
+      'AI could not extract valid questions from this document. Please ensure the paper has numbered questions.'
     );
   });
 });

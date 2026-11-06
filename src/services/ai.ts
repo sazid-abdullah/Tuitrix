@@ -725,6 +725,12 @@ export function moneyPrompt(question: string, snap: MoneySnapshotResult, state?:
   return `My tuition money so far:\n\n${state ? moneyPromptData(snap, state) : ''}\n\nMy question: ${question}`;
 }
 
+export const isDummyExam = (ex: any): boolean => {
+  if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) return true;
+  if (ex.questions.length === 1 && /sample mcq|question text/i.test(ex.questions[0]?.text || '')) return true;
+  return false;
+};
+
 export function normalizeExam(raw: any): Exam {
   const x = raw && typeof raw === 'object' ? raw : {};
   const seen = new Set();
@@ -805,6 +811,8 @@ export function examJsonPrompt(content: string): string {
     { "type": "written", "n": "3", "text": "Short answer question", "marks": 3, "answer": "Model answer" }
   ]
 }
+
+CRITICAL: Extract ALL questions present in the document. Do not output placeholder questions. If no questions are found, return {"questions": []}.
 
 <<<PAPER
 ${content}

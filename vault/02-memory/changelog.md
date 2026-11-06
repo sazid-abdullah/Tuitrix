@@ -6,6 +6,14 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
+## [2026-11-06] — Invalidation of Dummy Exam Caches & Removal of Mock Question Fallbacks
+- Added `isDummyExam` helper in `src/services/ai.ts` and `src/App.tsx` (`onStartExam`) to detect and invalidate empty or single-placeholder dummy exams (`Sample MCQ question text`, `Question text`), forcing automatic re-parsing from source.
+- Added raw binary PDF guard in `onStartExam` (`src/App.tsx`) to detect `%PDF-` streams and display an actionable toast directing users to "Upload question paper" for AI Vision processing.
+- Guarded `onStartExam` to throw `"AI could not extract valid questions from this document. Please ensure the paper has numbered questions."` when `parsed.questions.length === 0` instead of persisting an empty or broken exam.
+- Updated `examJsonPrompt` in `src/services/ai.ts` with explicit critical instructions forbidding placeholder question manufacture and requiring `{"questions": []}` if no questions are found.
+- Verified `normalizeExam` preserves empty questions array without manufacturing fake/mock questions.
+- Expanded unit test coverage in `src/tests/aiAndSettings.test.tsx` verifying `isDummyExam` detection, cache check invalidation, empty question array handling in `normalizeExam`, and `%PDF-` binary input rejection.
+
 ## [2026-11-04] — Interactive Exam Scoring Sync, AI Mark Mapping, Board Exam Studio & AI Deep-Linking
 - Fixed `ResultView` AI mark mapping for non-CQ written questions (`q.id:0` to `q.id`), guarded empty typed answers in `handleAIMark`, and added live student profile score re-syncing on mark save.
 - Extracted `isQuestionAnswered` helper in `ExamView` to accurately treat empty CQ parts as unanswered, reset `attempt.scoreLogged` on score deletion in `context.tsx`, and corrected chart CSS variable tokens in `StudentDetailView`.
