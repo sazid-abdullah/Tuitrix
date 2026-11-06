@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useEffect, Suspense, lazy, Component, ErrorInfo, ReactNode, ComponentType } from 'react';
 import { useStore } from './store/context';
 import { Navbar } from './components/Navbar';
 import { LegalModal } from './components/LegalModal';
@@ -23,15 +23,48 @@ import { StudentsView } from './views/StudentsView';
 import { ClassesView } from './views/ClassesView';
 import { SettingsView } from './views/SettingsView';
 
-// Route-based code splitting for heavy views
-const StudentDetailView = lazy(() => import('./views/StudentDetailView').then(m => ({ default: m.StudentDetailView })));
-const MoneyView = lazy(() => import('./views/MoneyView').then(m => ({ default: m.MoneyView })));
-const AIView = lazy(() => import('./views/AIView').then(m => ({ default: m.AIView })));
-const ExamView = lazy(() => import('./views/ExamView').then(m => ({ default: m.ExamView })));
-const ResultView = lazy(() => import('./views/ResultView').then(m => ({ default: m.ResultView })));
-const LandingView = lazy(() => import('./views/LandingView').then(m => ({ default: m.LandingView })));
-const HelpCenterView = lazy(() => import('./views/HelpCenterView').then(m => ({ default: m.HelpCenterView })));
-const OwnerDashboardView = lazy(() => import('./views/OwnerDashboardView').then(m => ({ default: m.OwnerDashboardView })));
+export function lazyWithRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      const mod = await factory();
+      try {
+        sessionStorage.removeItem('tuitrix_chunk_reload');
+      } catch {}
+      return mod;
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      const isChunkError =
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('Importing a module script failed') ||
+        msg.includes('dynamically imported module');
+
+      let alreadyReloaded = false;
+      try {
+        alreadyReloaded = sessionStorage.getItem('tuitrix_chunk_reload') === '1';
+      } catch {}
+
+      if (isChunkError && !alreadyReloaded && typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem('tuitrix_chunk_reload', '1');
+        } catch {}
+        window.location.reload();
+      }
+      throw err;
+    }
+  });
+}
+
+// Route-based code splitting for heavy views with auto-recovery on stale deployment chunks
+const StudentDetailView = lazyWithRetry(() => import('./views/StudentDetailView').then(m => ({ default: m.StudentDetailView })));
+const MoneyView = lazyWithRetry(() => import('./views/MoneyView').then(m => ({ default: m.MoneyView })));
+const AIView = lazyWithRetry(() => import('./views/AIView').then(m => ({ default: m.AIView })));
+const ExamView = lazyWithRetry(() => import('./views/ExamView').then(m => ({ default: m.ExamView })));
+const ResultView = lazyWithRetry(() => import('./views/ResultView').then(m => ({ default: m.ResultView })));
+const LandingView = lazyWithRetry(() => import('./views/LandingView').then(m => ({ default: m.LandingView })));
+const HelpCenterView = lazyWithRetry(() => import('./views/HelpCenterView').then(m => ({ default: m.HelpCenterView })));
+const OwnerDashboardView = lazyWithRetry(() => import('./views/OwnerDashboardView').then(m => ({ default: m.OwnerDashboardView })));
 
 export interface ErrorBoundaryProps {
   children: ReactNode;

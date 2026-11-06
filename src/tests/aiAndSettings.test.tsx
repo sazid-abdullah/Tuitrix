@@ -16,8 +16,11 @@ import {
   isDummyExam,
   examJsonPrompt,
   renderMarkdown,
+  parseAiJson,
+  renderDiagramSpecToSvgDataUri,
 } from '../services/ai';
 import { AIView } from '../views/AIView';
+import { lazyWithRetry } from '../App';
 import * as context from '../store/context';
 import { sanitizePlaceholder } from '../utils/auth';
 
@@ -710,14 +713,199 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
     expect(html).toContain('<img src="data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E" alt="Logic Gate" class="exam-fig" style="max-width:100%;margin:8px 0;" />');
   });
 
-  it('examJsonPrompt includes figure in structure and instructions for tables and SVG figures', () => {
+  it('examJsonPrompt includes figure in structure and instructions for compact diagram specs', () => {
     const prompt = examJsonPrompt('Logic gate test');
     expect(prompt).toContain('"figure": ""');
     expect(prompt).toContain(
-      'If a question includes a table (e.g., truth table, binary place-value table, data table), include the full Markdown pipe table in "stimulus".'
+      'NEVER output raw <svg> XML tags inside JSON (they waste tokens and break JSON escaping). Instead, for visual/picture questions:'
     );
     expect(prompt).toContain(
-      'If a question refers to a picture, logic gate, circuit, block diagram, or display from an uploaded PDF/image and no __TUITRIX_MEDIA_N__ token exists, generate a clean, accurate inline <svg viewBox="0 0 260 110" xmlns="http://www.w3.org/2000/svg">...</svg> in "figure"'
+      'For tables (truth tables, place-value tables), put a Markdown pipe table in "stimulus".'
     );
+    expect(prompt).toContain(
+      'For logic gates, set "figure" to "gate:AND(A,B->Y)", "gate:OR(A,B->Y)", "gate:NOT(A->Y)", "gate:NAND(A,B->Y)", "gate:NOR(A,B->Y)", "gate:XOR(A,B->Y)", or "gate:XNOR(A,B->Y)"'
+    );
+    expect(prompt).toContain(
+      'For digital device/flip-flop blocks, set "figure" to "block:(Pin1,Pin2->Out1,Out2)"'
+    );
+    expect(prompt).toContain(
+      'For 7-segment displays, set "figure" to "seg7:3" (with the lit digit). For number boxes, set "figure" to "boxes:3|C"'
+    );
+  });
+
+  describe('Compact Diagram Spec Renderer (renderDiagramSpecToSvgDataUri)', () => {
+    it('renders gate:AND(A,B->Y) without leaking the text "AND" inside the SVG', () => {
+      const uri = renderDiagramSpecToSvgDataUri('gate:AND(A,B->Y)');
+      expect(uri).toBeDefined();
+      expect(uri).toMatch(/^data:image\/svg\+xml;utf8,/);
+
+      const decodedSvg = decodeURIComponent(uri!.replace('data:image/svg+xml;utf8,', ''));
+      expect(decodedSvg).toContain('viewBox="0 0 260 110"');
+      expect(decodedSvg).toContain('>A<');
+      expect(decodedSvg).toContain('>B<');
+      expect(decodedSvg).toContain('>Y<');
+      // Crucial: The gate type "AND" must NOT be printed as text inside the SVG
+      expect(decodedSvg).not.toMatch(/>\s*AND\s*</i);
+      expect(decodedSvg).not.toContain('text>AND');
+    });
+
+    it('renders all standard logic gates properly', () => {
+      const gates = ['OR', 'NOT', 'NAND', 'NOR', 'XOR', 'XNOR'];
+      for (const g of gates) {
+        const uri = renderDiagramSpecToSvgDataUri(`gate:${g}(A,B->Y)`);
+        expect(uri).toBeDefined();
+        const decoded = decodeURIComponent(uri!.replace('data:image/svg+xml;utf8,', ''));
+        // Verify gate label is not leaked in text
+        expect(decoded).not.toContain(`>${g}<`);
+      }
+    });
+
+    it('renders IC block without printing the device answer name in the box', () => {
+      const uri = renderDiagramSpecToSvgDataUri('block:FullAdder(A,B,Cin->Sum,Cout)');
+      expect(uri).toBeDefined();
+      const decoded = decodeURIComponent(uri!.replace('data:image/svg+xml;utf8,', ''));
+      expect(decoded).toContain('viewBox="0 0 260 120"');
+      expect(decoded).toContain('>A<');
+      expect(decoded).toContain('>Sum<');
+      expect(decoded).toContain('>Cout<');
+      // Must not leak the device name
+      expect(decoded).not.toContain('FullAdder');
+    });
+
+    it('renders 7-segment display for numeric digits', () => {
+      const uri = renderDiagramSpecToSvgDataUri('seg7:3');
+      expect(uri).toBeDefined();
+      const decoded = decodeURIComponent(uri!.replace('data:image/svg+xml;utf8,', ''));
+      expect(decoded).toContain('viewBox="0 0 120 160"');
+      // Lit segments should use #38bdf8
+      expect(decoded).toContain('fill="#38bdf8"');
+    });
+
+    it('renders digit boxes for boxes:3|C and boxes:1011(8,4,2,1)', () => {
+      const uri1 = renderDiagramSpecToSvgDataUri('boxes:3|C');
+      expect(uri1).toBeDefined();
+      const decoded1 = decodeURIComponent(uri1!.replace('data:image/svg+xml;utf8,', ''));
+      expect(decoded1).toContain('>3<');
+      expect(decoded1).toContain('>C<');
+
+      const uri2 = renderDiagramSpecToSvgDataUri('boxes:1011(8,4,2,1)');
+      expect(uri2).toBeDefined();
+      const decoded2 = decodeURIComponent(uri2!.replace('data:image/svg+xml;utf8,', ''));
+      expect(decoded2).toContain('>8<');
+      expect(decoded2).toContain('>1<');
+    });
+
+    it('returns undefined for invalid or unrecognized specs', () => {
+      expect(renderDiagramSpecToSvgDataUri('')).toBeUndefined();
+      expect(renderDiagramSpecToSvgDataUri('unknown:something')).toBeUndefined();
+      expect(renderDiagramSpecToSvgDataUri('https://example.com/img.png')).toBeUndefined();
+    });
+  });
+
+  describe('parseAiJson Truncated Array Recovery', () => {
+    it('recovers completed questions from partially truncated JSON response', () => {
+      const truncatedRaw = `\`\`\`json
+{
+  "title": "SSC Physics 2026",
+  "duration": 60,
+  "instructions": "Answer all questions",
+  "cqChoose": 0,
+  "questions": [
+    {
+      "type": "mcq",
+      "n": "1",
+      "stimulus": "",
+      "figure": "gate:AND(A,B->Y)",
+      "text": "What is the output when A=1, B=1?",
+      "options": ["0", "1", "High-Z", "Undefined"],
+      "answer": 1,
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "n": "2",
+      "stimulus": "",
+      "figure": "",
+      "text": "Which logic gate performs inversion?",
+      "options": ["OR", "AND", "NOT", "XOR"],
+      "answer": 2,
+      "marks": 1
+    },
+    {
+      "type": "cq",
+      "n": "3",
+      "stimulus": "A student builds a combinational logic circuit.",
+      "parts": [
+        { "label": "a", "text": "What is a universal gate?", "marks": 1, "answer": "NAND and NOR gates." },
+        { "label": "b", "text": "Explain De Morgan laws.", "marks": 2, "answer": "De Morgan theorem statements." }
+      ]
+    },
+    {
+      "type": "mcq",
+      "n": "4",
+      "stimulus": "",
+      "figure": "seg7:7",
+      "text": "Truncated mid-sentence and missing braces...`;
+
+      const result = parseAiJson(truncatedRaw);
+      expect(result).toBeDefined();
+      expect(result.title).toBe('SSC Physics 2026');
+      expect(Array.isArray(result.questions)).toBe(true);
+      // All 3 completed questions must be cleanly recovered!
+      expect(result.questions.length).toBe(3);
+      expect(result.questions[0].n).toBe('1');
+      expect(result.questions[1].n).toBe('2');
+      expect(result.questions[2].n).toBe('3');
+      expect(result.questions[2].parts.length).toBe(2);
+    });
+  });
+
+  describe('lazyWithRetry Auto-Recovery', () => {
+    beforeEach(() => {
+      sessionStorage.clear();
+      vi.restoreAllMocks();
+    });
+
+    it('loads component successfully and clears tuitrix_chunk_reload', async () => {
+      sessionStorage.setItem('tuitrix_chunk_reload', '1');
+      const DummyComponent = () => React.createElement('div', null, 'Loaded');
+      const factory = vi.fn().mockResolvedValue({ default: DummyComponent });
+
+      const LazyComp = lazyWithRetry(factory);
+      const { container } = render(
+        React.createElement(React.Suspense, { fallback: 'Loading...' }, React.createElement(LazyComp))
+      );
+
+      await waitFor(() => {
+        expect(container.textContent).toContain('Loaded');
+      });
+      expect(sessionStorage.getItem('tuitrix_chunk_reload')).toBeNull();
+    });
+
+    it('reloads page on chunk loading error when reload flag is not set', async () => {
+      const reloadMock = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { ...window.location, reload: reloadMock },
+        writable: true,
+      });
+
+      const chunkError = new Error('Failed to fetch dynamically imported module: ./chunk-xyz.js');
+      const factory = vi.fn().mockRejectedValue(chunkError);
+
+      const LazyComp = lazyWithRetry(factory);
+
+      render(
+        React.createElement(
+          'div',
+          null,
+          React.createElement(React.Suspense, { fallback: 'Loading...' }, React.createElement(LazyComp))
+        )
+      );
+
+      await waitFor(() => {
+        expect(sessionStorage.getItem('tuitrix_chunk_reload')).toBe('1');
+        expect(reloadMock).toHaveBeenCalled();
+      });
+    });
   });
 });

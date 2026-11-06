@@ -94,6 +94,26 @@ export function parseAiJson(raw: string): any {
     const candidate = t.slice(firstBrace, lastBrace + 1);
     try { return JSON.parse(candidate); } catch {}
   }
+  // 4. Truncation recovery for questions array
+  if (firstBrace !== -1 && t.includes('"questions"')) {
+    const qIdx = t.indexOf('"questions"');
+    const arrayStart = t.indexOf('[', qIdx);
+    if (arrayStart !== -1) {
+      let searchPos = t.length;
+      while (searchPos > arrayStart) {
+        const lastValidBrace = t.lastIndexOf('}', searchPos);
+        if (lastValidBrace === -1 || lastValidBrace <= arrayStart) break;
+        const candidate = t.slice(firstBrace, lastValidBrace + 1) + ']}';
+        try {
+          const parsed = JSON.parse(candidate);
+          if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+            return parsed;
+          }
+        } catch {}
+        searchPos = lastValidBrace - 1;
+      }
+    }
+  }
   throw new Error('AI did not return valid JSON. Please try again or use a clearer question paper.');
 }
 
@@ -373,7 +393,7 @@ export async function callAI(
           contents,
           generationConfig: {
             temperature: opts.temperature ?? 0.6,
-            maxOutputTokens: opts.maxTokens || 8192,
+            maxOutputTokens: opts.maxTokens || (opts.json ? 32768 : 8192),
             ...(opts.json ? { responseMimeType: 'application/json' } : {}),
           },
         }),
@@ -732,6 +752,233 @@ export const isDummyExam = (ex: any): boolean => {
   return false;
 };
 
+export function renderDiagramSpecToSvgDataUri(spec: string): string | undefined {
+  if (!spec || typeof spec !== 'string') return undefined;
+  const s = spec.trim();
+
+  // 1. Logic Gate: gate:TYPE(IN->OUT)
+  // e.g. gate:AND(A,B->Y), gate:NOR(A,B->Y), gate:NOT(A->Y)
+  const gateMatch = s.match(/^gate:\s*([a-z]+)\s*\(\s*([^->]*?)\s*(?:->\s*([^)]*?))?\s*\)$/i);
+  if (gateMatch) {
+    const type = gateMatch[1].toUpperCase();
+    const inStr = gateMatch[2] || '';
+    const outStr = gateMatch[3] || 'Y';
+    const inputs = inStr.split(',').map(x => x.trim()).filter(Boolean);
+    const outputs = outStr.split(',').map(x => x.trim()).filter(Boolean);
+    if (outputs.length === 0) outputs.push('Y');
+
+    const w = 260;
+    const h = 110;
+    let gateBody = '';
+    let bubble = '';
+    let xorCurve = '';
+    let outputX = 160;
+
+    switch (type) {
+      case 'NOT':
+        gateBody = '<polygon points="100,30 150,55 100,80" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        bubble = '<circle cx="156" cy="55" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />';
+        outputX = 162;
+        break;
+
+      case 'AND':
+        gateBody = '<path d="M 100 30 L 130 30 A 25 25 0 0 1 130 80 L 100 80 Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        outputX = 155;
+        break;
+
+      case 'NAND':
+        gateBody = '<path d="M 100 30 L 130 30 A 25 25 0 0 1 130 80 L 100 80 Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        bubble = '<circle cx="161" cy="55" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />';
+        outputX = 167;
+        break;
+
+      case 'OR':
+        gateBody = '<path d="M 95 30 Q 115 55 95 80 Q 135 78 158 55 Q 135 32 95 30 Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        outputX = 158;
+        break;
+
+      case 'NOR':
+        gateBody = '<path d="M 95 30 Q 115 55 95 80 Q 135 78 158 55 Q 135 32 95 30 Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        bubble = '<circle cx="164" cy="55" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />';
+        outputX = 170;
+        break;
+
+      case 'XOR':
+        xorCurve = '<path d="M 90 30 Q 110 55 90 80" stroke="#38bdf8" stroke-width="2.5" fill="none" />';
+        gateBody = '<path d="M 98 30 Q 118 55 98 80 Q 138 78 163 55 Q 138 32 98 30 Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        outputX = 163;
+        break;
+
+      case 'XNOR':
+        xorCurve = '<path d="M 90 30 Q 110 55 90 80" stroke="#38bdf8" stroke-width="2.5" fill="none" />';
+        gateBody = '<path d="M 98 30 Q 118 55 98 80 Q 138 78 163 55 Q 138 32 98 30 Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />';
+        bubble = '<circle cx="169" cy="55" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />';
+        outputX = 175;
+        break;
+
+      default:
+        return undefined;
+    }
+
+    let inElements = '';
+    const inCount = Math.max(1, inputs.length);
+    const startX = 35;
+    const gateInX = (type === 'OR' || type === 'NOR') ? 104 : (type === 'XOR' || type === 'XNOR') ? 92 : 100;
+
+    for (let i = 0; i < inCount; i++) {
+      const y = inCount === 1 ? 55 : 40 + (i * 30) / (inCount - 1);
+      const label = inputs[i] || (inCount === 1 ? 'A' : String.fromCharCode(65 + i));
+      inElements += `<line x1="${startX}" y1="${y}" x2="${gateInX}" y2="${y}" stroke="#38bdf8" stroke-width="2" />`;
+      inElements += `<text x="${startX - 6}" y="${y + 4}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="end">${label}</text>`;
+    }
+
+    let outElements = '';
+    const endX = 225;
+    for (let i = 0; i < outputs.length; i++) {
+      const y = outputs.length === 1 ? 55 : 42 + (i * 26) / (outputs.length - 1);
+      const label = outputs[i];
+      outElements += `<line x1="${outputX}" y1="${y}" x2="${endX}" y2="${y}" stroke="#38bdf8" stroke-width="2" />`;
+      outElements += `<text x="${endX + 6}" y="${y + 4}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="start">${label}</text>`;
+    }
+
+    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${xorCurve}${gateBody}${bubble}${inElements}${outElements}</svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  // 2. IC Block: block:TITLE(IN->OUT) or block:(IN->OUT)
+  const blockMatch = s.match(/^block:\s*(?:[^(]*?)\s*\(\s*([^->]*?)\s*(?:->\s*([^)]*?))?\s*\)$/i);
+  if (blockMatch) {
+    const inStr = blockMatch[1] || '';
+    const outStr = blockMatch[2] || '';
+    const inputs = inStr.split(',').map(x => x.trim()).filter(Boolean);
+    const outputs = outStr.split(',').map(x => x.trim()).filter(Boolean);
+
+    const w = 260;
+    const h = 120;
+    const boxX = 75;
+    const boxY = 16;
+    const boxW = 110;
+    const boxH = 88;
+
+    let inElements = '';
+    const inCount = Math.max(1, inputs.length);
+    for (let i = 0; i < inCount; i++) {
+      const y = inCount === 1 ? 60 : 32 + (i * 56) / (inCount - 1);
+      const label = inputs[i] || `In${i + 1}`;
+      inElements += `<line x1="28" y1="${y}" x2="${boxX}" y2="${y}" stroke="#38bdf8" stroke-width="2" />`;
+      inElements += `<text x="22" y="${y + 4}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" text-anchor="end">${label}</text>`;
+    }
+
+    let outElements = '';
+    const outCount = Math.max(1, outputs.length);
+    for (let i = 0; i < outCount; i++) {
+      const y = outCount === 1 ? 60 : 32 + (i * 56) / (outCount - 1);
+      const label = outputs[i] || `Out${i + 1}`;
+      outElements += `<line x1="${boxX + boxW}" y1="${y}" x2="232" y2="${y}" stroke="#38bdf8" stroke-width="2" />`;
+      outElements += `<text x="238" y="${y + 4}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" text-anchor="start">${label}</text>`;
+    }
+
+    const notch = `<path d="M ${boxX + boxW / 2 - 8} ${boxY} A 8 8 0 0 0 ${boxX + boxW / 2 + 8} ${boxY}" stroke="#38bdf8" stroke-width="2" fill="none" />`;
+    const box = `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="6" stroke="#38bdf8" stroke-width="2.5" fill="#090d16" />`;
+    const qMark = `<text x="${boxX + boxW / 2}" y="${boxY + boxH / 2 + 8}" fill="#38bdf8" opacity="0.6" font-family="system-ui, sans-serif" font-size="24" font-weight="bold" text-anchor="middle">?</text>`;
+
+    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${box}${notch}${qMark}${inElements}${outElements}</svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  // 3. 7-Segment Display: seg7:DIGIT (e.g. seg7:3)
+  const seg7Match = s.match(/^seg7:\s*([0-9a-f])/i);
+  if (seg7Match) {
+    const d = seg7Match[1].toUpperCase();
+    const map: Record<string, string[]> = {
+      '0': ['a', 'b', 'c', 'd', 'e', 'f'],
+      '1': ['b', 'c'],
+      '2': ['a', 'b', 'g', 'e', 'd'],
+      '3': ['a', 'b', 'g', 'c', 'd'],
+      '4': ['f', 'g', 'b', 'c'],
+      '5': ['a', 'f', 'g', 'c', 'd'],
+      '6': ['a', 'f', 'g', 'e', 'c', 'd'],
+      '7': ['a', 'b', 'c'],
+      '8': ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+      '9': ['a', 'b', 'c', 'd', 'f', 'g'],
+      'A': ['a', 'b', 'c', 'e', 'f', 'g'],
+      'B': ['c', 'd', 'e', 'f', 'g'],
+      'C': ['a', 'd', 'e', 'f'],
+      'D': ['b', 'c', 'd', 'e', 'g'],
+      'E': ['a', 'd', 'e', 'f', 'g'],
+      'F': ['a', 'e', 'f', 'g'],
+    };
+    const active = new Set(map[d] || []);
+    const onColor = '#38bdf8';
+    const offColor = '#1e293b';
+    const offOpacity = '0.25';
+
+    const seg = (id: string, path: string) => {
+      const isOn = active.has(id);
+      return `<path d="${path}" fill="${isOn ? onColor : offColor}" opacity="${isOn ? '1' : offOpacity}" />`;
+    };
+
+    const paths = {
+      a: 'M 32 18 L 88 18 L 80 26 L 40 26 Z',
+      b: 'M 90 20 L 90 74 L 82 68 L 82 28 Z',
+      c: 'M 90 86 L 90 140 L 82 132 L 82 92 Z',
+      d: 'M 32 142 L 88 142 L 80 134 L 40 134 Z',
+      e: 'M 30 86 L 30 140 L 38 132 L 38 92 Z',
+      f: 'M 30 20 L 30 74 L 38 68 L 38 28 Z',
+      g: 'M 34 79 L 40 75 L 80 75 L 86 79 L 80 83 L 40 83 Z',
+    };
+
+    const bg = '<rect x="14" y="8" width="92" height="144" rx="8" fill="#090d16" stroke="#334155" stroke-width="1.5" />';
+    const segElements = Object.entries(paths).map(([id, p]) => seg(id, p)).join('');
+    const svg = `<svg viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">${bg}${segElements}</svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  // 4. Boxes: boxes:VAL1|VAL2... or boxes:1011(8,4,2,1)
+  const boxesMatch = s.match(/^boxes:\s*([^(|]+)(?:\(([^)]+)\)|(.*))?$/i);
+  if (boxesMatch) {
+    const rawVal = boxesMatch[1] || '';
+    const weightsStr = boxesMatch[2] || '';
+    const pipeRest = boxesMatch[3] || '';
+
+    let values: string[] = [];
+    let weights: string[] = [];
+
+    if (pipeRest) {
+      values = [rawVal, ...pipeRest.split('|').filter(Boolean)].map(x => x.replace(/^\|/, '').trim());
+    } else if (weightsStr) {
+      values = rawVal.includes('|') ? rawVal.split('|').map(x => x.trim()) : rawVal.split('');
+      weights = weightsStr.split(',').map(x => x.trim());
+    } else {
+      values = rawVal.includes('|') ? rawVal.split('|').map(x => x.trim()) : [rawVal];
+    }
+
+    if (values.length === 0) return undefined;
+
+    const boxSize = 42;
+    const gap = 10;
+    const padding = 20;
+    const w = padding * 2 + values.length * boxSize + (values.length - 1) * gap;
+    const h = weights.length > 0 ? 90 : 70;
+    const startY = weights.length > 0 ? 34 : 14;
+
+    let elements = '';
+    for (let i = 0; i < values.length; i++) {
+      const x = padding + i * (boxSize + gap);
+      if (weights[i]) {
+        elements += `<text x="${x + boxSize / 2}" y="22" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" text-anchor="middle">${weights[i]}</text>`;
+      }
+      elements += `<rect x="${x}" y="${startY}" width="${boxSize}" height="${boxSize}" rx="5" stroke="#38bdf8" stroke-width="2" fill="#090d16" />`;
+      elements += `<text x="${x + boxSize / 2}" y="${startY + boxSize / 2 + 6}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" text-anchor="middle">${values[i]}</text>`;
+    }
+
+    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${elements}</svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  return undefined;
+}
+
 export function normalizeExam(raw: any): Exam {
   const x = raw && typeof raw === 'object' ? raw : {};
   const seen = new Set();
@@ -739,6 +986,8 @@ export function normalizeExam(raw: any): Exam {
     if (!fig) return undefined;
     const str = String(fig).trim();
     if (!str) return undefined;
+    const diagramUri = renderDiagramSpecToSvgDataUri(str);
+    if (diagramUri) return diagramUri;
     if (/^<svg/i.test(str)) {
       return 'data:image/svg+xml;utf8,' + encodeURIComponent(str);
     }
@@ -824,8 +1073,11 @@ export function examJsonPrompt(content: string): string {
 }
 
 CRITICAL: Extract ALL questions present in the document. Do not output placeholder questions. If no questions are found, return {"questions": []}.
-- If a question includes a table (e.g., truth table, binary place-value table, data table), include the full Markdown pipe table in "stimulus".
-- If a question refers to a picture, logic gate, circuit, block diagram, or display from an uploaded PDF/image and no __TUITRIX_MEDIA_N__ token exists, generate a clean, accurate inline <svg viewBox="0 0 260 110" xmlns="http://www.w3.org/2000/svg">...</svg> in "figure" (using stroke="#38bdf8" fill="none" and fill="#e2e8f0" for text labels so it is visible on dark/light backgrounds) OR provide the clear diagram/labels in "stimulus" so the student has all visual information needed to answer.
+NEVER output raw <svg> XML tags inside JSON (they waste tokens and break JSON escaping). Instead, for visual/picture questions:
+- For tables (truth tables, place-value tables), put a Markdown pipe table in "stimulus".
+- For logic gates, set "figure" to "gate:AND(A,B->Y)", "gate:OR(A,B->Y)", "gate:NOT(A->Y)", "gate:NAND(A,B->Y)", "gate:NOR(A,B->Y)", "gate:XOR(A,B->Y)", or "gate:XNOR(A,B->Y)" (matching the picture's gate shape and input/output labels).
+- For digital device/flip-flop blocks, set "figure" to "block:(Pin1,Pin2->Out1,Out2)" listing only the visible pin labels.
+- For 7-segment displays, set "figure" to "seg7:3" (with the lit digit). For number boxes, set "figure" to "boxes:3|C" or put the expression/circuit in "stimulus".
 
 <<<PAPER
 ${content}
