@@ -485,6 +485,7 @@ export function renderMarkdown(md: string): string {
 
   const inline = (s: string) =>
     s
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="exam-fig" style="max-width:100%;margin:8px 0;" />')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
@@ -734,6 +735,15 @@ export const isDummyExam = (ex: any): boolean => {
 export function normalizeExam(raw: any): Exam {
   const x = raw && typeof raw === 'object' ? raw : {};
   const seen = new Set();
+  const normalizeFigure = (fig: any): string | undefined => {
+    if (!fig) return undefined;
+    const str = String(fig).trim();
+    if (!str) return undefined;
+    if (/^<svg/i.test(str)) {
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(str);
+    }
+    return str;
+  };
   const questions: Question[] = (Array.isArray(x.questions) ? x.questions : [])
     .filter((q: any) => q && typeof q === 'object')
     .map((q: any, i: number) => {
@@ -749,7 +759,7 @@ export function normalizeExam(raw: any): Exam {
           type: 'mcq' as const,
           stimulus: q.stimulus ? String(q.stimulus) : '',
           text: String(q.text || ''),
-          figure: q.figure ? String(q.figure) : undefined,
+          figure: normalizeFigure(q.figure),
           options: opts.length ? opts : ['Option 1', 'Option 2'],
           optionFigures: Array.isArray(q.optionFigures) ? q.optionFigures : undefined,
           answer: typeof q.answer === 'number' ? q.answer : 0,
@@ -771,7 +781,7 @@ export function normalizeExam(raw: any): Exam {
           n,
           type: 'cq' as const,
           stimulus: q.stimulus ? String(q.stimulus) : '',
-          figure: q.figure ? String(q.figure) : undefined,
+          figure: normalizeFigure(q.figure),
           parts: parts.length ? parts : [{ label: 'a', text: 'Answer the question', marks: 5 }],
         };
       }
@@ -779,8 +789,9 @@ export function normalizeExam(raw: any): Exam {
         id,
         n,
         type: 'written' as const,
+        stimulus: q.stimulus ? String(q.stimulus) : undefined,
         text: String(q.text || ''),
-        figure: q.figure ? String(q.figure) : undefined,
+        figure: normalizeFigure(q.figure),
         marks: Number(q.marks) || 1,
         answer: q.answer ? String(q.answer) : undefined,
       };
@@ -806,13 +817,15 @@ export function examJsonPrompt(content: string): string {
   "instructions": "General instructions",
   "cqChoose": 0,
   "questions": [
-    { "type": "mcq", "n": "1", "stimulus": "", "text": "Question text", "options": ["Option A", "Option B", "Option C", "Option D"], "answer": 0, "marks": 1 },
-    { "type": "cq", "n": "2", "stimulus": "Stimulus text", "parts": [ { "label": "a", "text": "Part text", "marks": 2, "answer": "Model answer" } ] },
-    { "type": "written", "n": "3", "text": "Short answer question", "marks": 3, "answer": "Model answer" }
+    { "type": "mcq", "n": "1", "stimulus": "", "figure": "", "text": "Question text", "options": ["Option A", "Option B", "Option C", "Option D"], "answer": 0, "marks": 1 },
+    { "type": "cq", "n": "2", "stimulus": "Stimulus text", "figure": "", "parts": [ { "label": "a", "text": "Part text", "marks": 2, "answer": "Model answer" } ] },
+    { "type": "written", "n": "3", "stimulus": "", "figure": "", "text": "Short answer question", "marks": 3, "answer": "Model answer" }
   ]
 }
 
 CRITICAL: Extract ALL questions present in the document. Do not output placeholder questions. If no questions are found, return {"questions": []}.
+- If a question includes a table (e.g., truth table, binary place-value table, data table), include the full Markdown pipe table in "stimulus".
+- If a question refers to a picture, logic gate, circuit, block diagram, or display from an uploaded PDF/image and no __TUITRIX_MEDIA_N__ token exists, generate a clean, accurate inline <svg viewBox="0 0 260 110" xmlns="http://www.w3.org/2000/svg">...</svg> in "figure" (using stroke="#38bdf8" fill="none" and fill="#e2e8f0" for text labels so it is visible on dark/light backgrounds) OR provide the clear diagram/labels in "stimulus" so the student has all visual information needed to answer.
 
 <<<PAPER
 ${content}

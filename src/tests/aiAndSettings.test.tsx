@@ -15,6 +15,7 @@ import {
   normalizeExam,
   isDummyExam,
   examJsonPrompt,
+  renderMarkdown,
 } from '../services/ai';
 import { AIView } from '../views/AIView';
 import * as context from '../store/context';
@@ -645,6 +646,78 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
       }
     }).toThrow(
       'AI could not extract valid questions from this document. Please ensure the paper has numbered questions.'
+    );
+  });
+
+  it('converts inline <svg> strings in q.figure into data:image/svg+xml;utf8,... data URIs and preserves stimulus Markdown tables', () => {
+    const rawSvg = '<svg viewBox="0 0 260 110" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" stroke="#38bdf8" fill="none" /><text x="50" y="55" fill="#e2e8f0">AND Gate</text></svg>';
+    const truthTableStimulus = '| A | B | Output |\n|---|---|--------|\n| 0 | 0 | 0      |\n| 0 | 1 | 0      |\n| 1 | 0 | 0      |\n| 1 | 1 | 1      |';
+
+    const rawExam = {
+      title: 'Digital Logic Exam',
+      duration: 45,
+      questions: [
+        {
+          id: 'q1',
+          type: 'mcq',
+          stimulus: truthTableStimulus,
+          figure: rawSvg,
+          text: 'Which logic gate is depicted above?',
+          options: ['AND', 'OR', 'NOT', 'XOR'],
+          answer: 0,
+        },
+        {
+          id: 'q2',
+          type: 'cq',
+          stimulus: truthTableStimulus,
+          figure: `  ${rawSvg}  `,
+          parts: [
+            { label: 'a', text: 'Define the gate operation.', marks: 2 },
+          ],
+        },
+        {
+          id: 'q3',
+          type: 'written',
+          stimulus: truthTableStimulus,
+          figure: 'https://example.com/gate.png',
+          text: 'Explain circuit behavior.',
+          marks: 4,
+        },
+      ],
+    };
+
+    const normalized = normalizeExam(rawExam);
+
+    // Verify q1 MCQ:
+    const q1 = normalized.questions[0] as any;
+    expect(q1.stimulus).toBe(truthTableStimulus);
+    expect(q1.figure).toBe(`data:image/svg+xml;utf8,${encodeURIComponent(rawSvg)}`);
+
+    // Verify q2 CQ:
+    const q2 = normalized.questions[1] as any;
+    expect(q2.stimulus).toBe(truthTableStimulus);
+    expect(q2.figure).toBe(`data:image/svg+xml;utf8,${encodeURIComponent(rawSvg)}`);
+
+    // Verify q3 Written:
+    const q3 = normalized.questions[2] as any;
+    expect(q3.stimulus).toBe(truthTableStimulus);
+    expect(q3.figure).toBe('https://example.com/gate.png');
+  });
+
+  it('renders markdown images with exam-fig class and max-width style in renderMarkdown', () => {
+    const md = 'Here is the diagram:\n\n![Logic Gate](data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E)\n\nAnswer the question.';
+    const html = renderMarkdown(md);
+    expect(html).toContain('<img src="data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E" alt="Logic Gate" class="exam-fig" style="max-width:100%;margin:8px 0;" />');
+  });
+
+  it('examJsonPrompt includes figure in structure and instructions for tables and SVG figures', () => {
+    const prompt = examJsonPrompt('Logic gate test');
+    expect(prompt).toContain('"figure": ""');
+    expect(prompt).toContain(
+      'If a question includes a table (e.g., truth table, binary place-value table, data table), include the full Markdown pipe table in "stimulus".'
+    );
+    expect(prompt).toContain(
+      'If a question refers to a picture, logic gate, circuit, block diagram, or display from an uploaded PDF/image and no __TUITRIX_MEDIA_N__ token exists, generate a clean, accurate inline <svg viewBox="0 0 260 110" xmlns="http://www.w3.org/2000/svg">...</svg> in "figure"'
     );
   });
 });

@@ -13,6 +13,8 @@ tags: [changelog, history, releases]
 - Updated `examJsonPrompt` in `src/services/ai.ts` with explicit critical instructions forbidding placeholder question manufacture and requiring `{"questions": []}` if no questions are found.
 - Verified `normalizeExam` preserves empty questions array without manufacturing fake/mock questions.
 - Expanded unit test coverage in `src/tests/aiAndSettings.test.tsx` verifying `isDummyExam` detection, cache check invalidation, empty question array handling in `normalizeExam`, and `%PDF-` binary input rejection.
+- Added SVG/table extraction rules in `examJsonPrompt`, converting inline `<svg>` figures into sanitized `data:image/svg+xml;utf8,...` data URIs in `normalizeExam` for native `<img class="exam-fig">` rendering without XSS risk.
+- Supported Markdown image syntax `![alt](src)` in `renderMarkdown` and preserved `stimulus` tables and `figure` diagrams in `UploadPaperModal` `paperMd` reconstruction.
 
 ## [2026-11-04] — Interactive Exam Scoring Sync, AI Mark Mapping, Board Exam Studio & AI Deep-Linking
 - Fixed `ResultView` AI mark mapping for non-CQ written questions (`q.id:0` to `q.id`), guarded empty typed answers in `handleAIMark`, and added live student profile score re-syncing on mark save.

@@ -181,6 +181,7 @@ export interface WrittenQuestion {
   id: string;
   n: string;
   type: 'written';
+  stimulus?: string;
   text: string;
   figure?: string;
   marks: number;

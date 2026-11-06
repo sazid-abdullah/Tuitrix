@@ -106,13 +106,16 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
       const examId = uid();
       const now = new Date().toISOString();
 
-      const paperMd = textContent.trim() || normalized.questions.map((q, idx) =>
-        q.type === 'mcq'
-          ? `${q.n || idx + 1}. ${q.text}\n${q.options.map((o, oi) => `   (${String.fromCharCode(97 + oi)}) ${o}`).join('\n')}`
-          : q.type === 'cq'
-          ? `${q.n || idx + 1}. ${q.stimulus}\n${q.parts.map(p => `   (${p.label}) ${p.text} [${p.marks}]`).join('\n')}`
-          : `${q.n || idx + 1}. ${q.text} [${q.marks}]`
-      ).join('\n\n');
+      const paperMd = textContent.trim() || normalized.questions.map((q, idx) => {
+        const visual = `${'stimulus' in q && q.stimulus && q.type !== 'cq' ? q.stimulus + '\n' : ''}${q.figure ? `![Figure](${q.figure})\n` : ''}`;
+        if (q.type === 'mcq') {
+          return `${visual}${q.n || idx + 1}. ${q.text}\n${q.options.map((o, oi) => `   (${String.fromCharCode(97 + oi)}) ${o}`).join('\n')}`;
+        }
+        if (q.type === 'cq') {
+          return `${visual}${q.n || idx + 1}. ${q.stimulus}\n${q.parts.map(p => `   (${p.label}) ${p.text} [${p.marks}]`).join('\n')}`;
+        }
+        return `${visual}${q.n || idx + 1}. ${q.text} [${q.marks}]`;
+      }).join('\n\n');
 
       saveDoc({
         id: docId,
