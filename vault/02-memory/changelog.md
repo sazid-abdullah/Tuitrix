@@ -21,6 +21,8 @@ tags: [changelog, history, releases]
 - Added Instant Question Bank + OMR Mode in `UploadPaperModal.tsx`, split-screen PDF/image paper viewer in `ExamView.tsx`, and question count badges in `AIView.tsx`.
 - Removed raw PDF iframe leak from `ExamView.tsx` and removed blank OMR dummy mode from `UploadPaperModal.tsx` in favor of full AI vision question & diagram extraction with live progress status.
 - Raised file vision AI timeout to 90s in `callAI` and added deterministic diagram, truth-table, and display synthesis with answer leak stripping in `normalizeExam`.
+- Added back navigation button to AI Assistant results in `ResultView.tsx` and exit confirmation control in `ExamView.tsx`.
+- Implemented `purgeDummyRecords` in `src/store/context.tsx` to automatically purge stale `Question 1 / Option A` dummy exams, matching docs, and hanging attempts (`mw663ngzf313`) on startup and remote Firestore sync.
 
 ## [2026-11-04] — Interactive Exam Scoring Sync, AI Mark Mapping, Board Exam Studio & AI Deep-Linking
 - Fixed `ResultView` AI mark mapping for non-CQ written questions (`q.id:0` to `q.id`), guarded empty typed answers in `handleAIMark`, and added live student profile score re-syncing on mark save.

@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ResultView } from '../views/ResultView';
 import { ExamView, isQuestionAnswered } from '../views/ExamView';
-import { StoreProvider, useStore } from '../store/context';
+import { StoreProvider, useStore, purgeDummyRecords } from '../store/context';
 import * as context from '../store/context';
 import { Question } from '../types';
 
@@ -575,6 +575,150 @@ describe('StoreContext deleteExamScore resets scoreLogged on attempts', () => {
       );
       expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('#/result/att_local_share'));
       expect(mockToast).toHaveBeenCalledWith(expect.stringMatching(/copied to clipboard/i), 'success');
+    });
+  });
+
+  describe('Header Navigation & Exit Controls', () => {
+    it('navigates back to AI Assistant results from ResultView header button', () => {
+      const mockNavigate = vi.fn();
+      const mockState: any = {
+        students: [],
+        attempts: [
+          {
+            id: 'att_back_test',
+            examId: 'ex_back_test',
+            title: 'Math Model Test',
+            status: 'submitted',
+            startedAt: Date.now(),
+            answers: {},
+            marks: {},
+            aiMarks: {},
+          },
+        ],
+        exams: [{ id: 'ex_back_test', title: 'Math Exam', duration: 30, questions: [] }],
+        settings: { currency: '৳' },
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        studentName: () => '',
+        saveAttempt: vi.fn(),
+        deleteAttempt: vi.fn(),
+        saveExam: vi.fn(),
+        addExamScore: vi.fn(),
+        toast: vi.fn(),
+      } as any);
+
+      render(<ResultView attemptId="att_back_test" onNavigate={mockNavigate} />);
+
+      const backBtn = screen.getByRole('button', { name: /← Back to AI Assistant/i });
+      expect(backBtn).toBeInTheDocument();
+      fireEvent.click(backBtn);
+
+      expect(mockNavigate).toHaveBeenCalledWith('ai', 'tool=results');
+    });
+
+    it('renders exit button in ExamView and confirms exit to AI exam studio', () => {
+      const mockNavigate = vi.fn();
+      const mockState: any = {
+        students: [],
+        attempts: [
+          {
+            id: 'att_exit_test',
+            examId: 'ex_exit_test',
+            title: 'Biology Test',
+            status: 'running',
+            startedAt: Date.now(),
+            endsAt: Date.now() + 600000,
+            answers: {},
+            flags: [],
+          },
+        ],
+        exams: [
+          {
+            id: 'ex_exit_test',
+            title: 'Biology Test',
+            duration: 10,
+            questions: [
+              { id: 'q1', n: '1', type: 'mcq', text: 'Cell is?', options: ['A', 'B'], answer: 0, marks: 1 },
+            ],
+          },
+        ],
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        saveAttempt: vi.fn(),
+        toast: vi.fn(),
+      } as any);
+
+      render(<ExamView attemptId="att_exit_test" onNavigate={mockNavigate} />);
+
+      const exitBtn = screen.getByRole('button', { name: /← Exit Exam/i });
+      expect(exitBtn).toBeInTheDocument();
+      fireEvent.click(exitBtn);
+
+      // Confirm modal opens
+      expect(screen.getByText('Exit exam?')).toBeInTheDocument();
+      const confirmBtn = screen.getByRole('button', { name: /^Exit Exam$/i });
+      fireEvent.click(confirmBtn);
+
+      expect(mockNavigate).toHaveBeenCalledWith('ai', 'tool=exam');
+    });
+  });
+
+  describe('purgeDummyRecords Startup Sanitization', () => {
+    it('purges dummy Question 1 / Option A exams, matching docs, and hanging attempts', () => {
+      const corruptedState = {
+        exams: [
+          {
+            id: 'ex_dummy_omr',
+            docId: 'doc_dummy_omr',
+            title: 'board_paper.pdf',
+            questions: [
+              { id: 'q1', type: 'mcq', text: 'Question 1', options: ['Option A', 'Option B', 'Option C', 'Option D'] },
+              { id: 'q2', type: 'mcq', text: 'Question 2', options: ['Option A', 'Option B', 'Option C', 'Option D'] },
+            ],
+          },
+          {
+            id: 'ex_real',
+            docId: 'doc_real',
+            title: 'Real Physics Exam',
+            questions: [
+              { id: 'q1', type: 'mcq', text: 'What is force?', options: ['Push or pull', 'Energy'], answer: 0, marks: 1 },
+            ],
+          },
+        ],
+        docs: [
+          { id: 'doc_dummy_omr', title: 'board_paper.pdf', content: 'Original question paper attached. Answer questions 1 to 50 below.' },
+          { id: 'doc_real', title: 'Real Physics Exam', content: 'Real content here' },
+        ],
+        savedResources: [
+          { id: 'doc_dummy_omr', title: 'board_paper.pdf', content: 'Original question paper attached. Answer questions 1 to 50 below.' },
+          { id: 'res_real', title: 'Physics Notes', content: 'Real notes' },
+        ],
+        attempts: [
+          { id: 'mw663ngzf313', title: 'Hanging Attempt 1', examId: 'ex_dummy_omr', answers: {} },
+          { id: 'att_omr_ref', title: 'board_paper.pdf', examId: 'ex_dummy_omr', answers: {} },
+          { id: 'att_valid', title: 'Real Physics Exam', examId: 'ex_real', answers: {} },
+        ],
+      };
+
+      const cleaned = purgeDummyRecords(corruptedState);
+
+      // Dummy exam purged, real exam retained
+      expect(cleaned.exams).toHaveLength(1);
+      expect(cleaned.exams[0].id).toBe('ex_real');
+
+      // Dummy docs and resources purged
+      expect(cleaned.docs).toHaveLength(1);
+      expect(cleaned.docs[0].id).toBe('doc_real');
+      expect(cleaned.savedResources).toHaveLength(1);
+      expect(cleaned.savedResources[0].id).toBe('res_real');
+
+      // Hanging attempts and mw663ngzf313 purged, valid attempt retained
+      expect(cleaned.attempts).toHaveLength(1);
+      expect(cleaned.attempts[0].id).toBe('att_valid');
     });
   });
 });

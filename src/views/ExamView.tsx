@@ -32,6 +32,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
   const [flags, setFlags] = useState<string[]>(attempt?.flags || []);
   const [listModalOpen, setListModalOpen] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
 
   // Set exam mode on document body
   useEffect(() => {
@@ -148,6 +149,15 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
   return (
     <div>
       <div className="exam-head">
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '8px' }}>
+          <button
+            type="button"
+            className="btn sm ghost"
+            onClick={() => setConfirmExitOpen(true)}
+          >
+            ← Exit Exam
+          </button>
+        </div>
         <h1>{attempt.title}</h1>
         <div className="exam-time">Time allowed: {exam.duration} minutes</div>
       </div>
@@ -352,6 +362,19 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
         confirmLabel="Submit now"
         onConfirm={() => handleSubmit(false)}
         onClose={() => setConfirmSubmitOpen(false)}
+      />
+
+      {/* Confirm exit modal */}
+      <ConfirmModal
+        isOpen={confirmExitOpen}
+        title="Exit exam?"
+        message="Are you sure you want to exit this exam session? Any answers given have been automatically saved."
+        confirmLabel="Exit Exam"
+        onConfirm={() => {
+          setConfirmExitOpen(false);
+          onNavigate('ai', 'tool=exam');
+        }}
+        onClose={() => setConfirmExitOpen(false)}
       />
     </div>
   );

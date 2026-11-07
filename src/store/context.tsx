@@ -29,6 +29,61 @@ function defaultState(): AppState {
   };
 }
 
+export function purgeDummyRecords(parsed: any): any {
+  if (!parsed || typeof parsed !== 'object') return parsed;
+
+  const rawExams: any[] = Array.isArray(parsed.exams) ? parsed.exams : [];
+  const dummyExamIds = new Set<string>();
+  const dummyDocIds = new Set<string>();
+
+  const isDummyExam = (ex: any): boolean => {
+    if (!ex || typeof ex !== 'object') return true;
+    if (!Array.isArray(ex.questions) || ex.questions.length === 0) return true;
+    if (ex.questions.length === 1 && /sample mcq|question text/i.test(ex.questions[0]?.text || '')) return true;
+    if (ex.questions[0]?.text === 'Question 1' && ex.questions[0]?.options?.[0] === 'Option A') return true;
+    if (ex.instructions === 'Refer to original question paper and mark answers on the OMR sheet.') return true;
+    return false;
+  };
+
+  const validExams = rawExams.filter(e => {
+    if (isDummyExam(e)) {
+      if (e.id) dummyExamIds.add(e.id);
+      if (e.docId) dummyDocIds.add(e.docId);
+      return false;
+    }
+    return true;
+  });
+
+  const isDummyDoc = (d: any): boolean => {
+    if (!d || typeof d !== 'object') return true;
+    if (d.id && dummyDocIds.has(d.id)) return true;
+    if (typeof d.content === 'string' && d.content.includes('Original question paper attached. Answer questions 1 to')) return true;
+    return false;
+  };
+
+  const validDocs = (Array.isArray(parsed.docs) ? parsed.docs : []).filter((d: any) => !isDummyDoc(d));
+  const validSavedResources = (Array.isArray(parsed.savedResources) ? parsed.savedResources : []).filter((r: any) => !isDummyDoc(r));
+
+  const isHangingAttempt = (a: any): boolean => {
+    if (!a || typeof a !== 'object') return true;
+    if (a.id === 'mw663ngzf313') return true;
+    if (a.examId && dummyExamIds.has(a.examId)) return true;
+    if (Array.isArray(a.questions) && a.questions[0]?.text === 'Question 1' && a.questions[0]?.options?.[0] === 'Option A') return true;
+    if (typeof a.title === 'string' && /sample mcq|question text/i.test(a.title)) return true;
+    return false;
+  };
+
+  const validAttempts = (Array.isArray(parsed.attempts) ? parsed.attempts : []).filter((a: any) => !isHangingAttempt(a));
+
+  return {
+    ...parsed,
+    exams: validExams,
+    docs: validDocs,
+    savedResources: validSavedResources,
+    attempts: validAttempts,
+  };
+}
+
 function loadState(): AppState {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -40,7 +95,8 @@ function loadState(): AppState {
       }
       return def;
     }
-    const parsed = JSON.parse(raw);
+    const rawParsed = JSON.parse(raw);
+    const parsed = purgeDummyRecords(rawParsed);
     const loadedSettings = { ...defaultState().settings, ...(parsed.settings || {}) };
     const savedTheme = localStorage.getItem('tuitrix_theme');
     if (savedTheme === 'light' || savedTheme === 'dark') {
@@ -228,7 +284,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const docSnap = await getDoc(docRef);
 
           if (docSnap.exists()) {
-            let remoteState = docSnap.data() as AppState;
+            let remoteState = purgeDummyRecords(docSnap.data() as AppState);
             remoteState = {
               ...defaultState(),
               ...remoteState,
@@ -248,6 +304,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               attempts: Array.isArray(remoteState.attempts) ? remoteState.attempts : [],
               promoCodes: Array.isArray(remoteState.promoCodes) ? remoteState.promoCodes : [],
             };
+            remoteState = purgeDummyRecords(remoteState);
             if (isOwner && (!remoteState.isOwner || !remoteState.isAdmin || remoteState.role !== 'owner')) {
                remoteState = { ...remoteState, isOwner: true, isAdmin: true, role: 'owner' };
                await setDoc(docRef, remoteState);
@@ -263,9 +320,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Document doesn't exist, check if local state needs migrating
             const localRaw = localStorage.getItem(STORE_KEY);
             let needsMigration = false;
-            let dataToUpload = state;
+            let dataToUpload = purgeDummyRecords(state);
             if (localRaw) {
-               const localParsed = JSON.parse(localRaw) as AppState;
+               const localParsed = purgeDummyRecords(JSON.parse(localRaw)) as AppState;
                // Heuristic to see if it's not empty
                if (localParsed.students && localParsed.students.length > 0 || localParsed.settings?.tutorName) {
                  needsMigration = true;

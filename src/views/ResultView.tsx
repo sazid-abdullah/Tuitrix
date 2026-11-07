@@ -416,6 +416,13 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
           </div>
         </div>
         <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn sm ghost"
+            onClick={() => onNavigate('ai', 'tool=results')}
+          >
+            ← Back to AI Assistant
+          </button>
           {!isReadOnly && !attempt.studentId && (
             <select
               value={selectedStudentId}
