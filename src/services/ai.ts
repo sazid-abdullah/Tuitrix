@@ -368,7 +368,7 @@ export async function callAI(
   const provider = state.ai.provider;
   const key = (state.ai.keys[provider] || '').trim();
   const model = autoModel(provider, state);
-  const timeoutMs = opts.files && opts.files.length > 0 ? 35000 : 30000;
+  const timeoutMs = opts.files && opts.files.length > 0 ? 90000 : 45000;
 
   if (provider === 'gemini') {
     if (!key) throw new Error('Google Gemini API key is missing. Add your free key in Settings → AI.');
@@ -778,6 +778,7 @@ export function moneyPrompt(question: string, snap: MoneySnapshotResult, state?:
 export const isDummyExam = (ex: any): boolean => {
   if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) return true;
   if (ex.questions.length === 1 && /sample mcq|question text/i.test(ex.questions[0]?.text || '')) return true;
+  if (ex.questions[0]?.text === 'Question 1' && ex.questions[0]?.options?.[0] === 'Option A') return true;
   return false;
 };
 
@@ -1008,6 +1009,89 @@ export function renderDiagramSpecToSvgDataUri(spec: string): string | undefined 
   return undefined;
 }
 
+export function stripAnswerLeak(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/(?:\s+|\n)*(?:\*{1,2})?(?:\(?\s*(?:Answer|Ans)\s*[:.-]?\s*(?:\([a-dA-D]\)|[a-dA-D])\.?\s*\)?)(?:\*{1,2})?\s*$/i, '')
+    .trim();
+}
+
+export function inferDiagramFromQuestion(q: {
+  text: string;
+  options?: string[];
+  answer?: number;
+  stimulus?: string;
+  figure?: string;
+}): { stimulus?: string; figure?: string } {
+  let figure = q.figure;
+  let stimulus = q.stimulus;
+
+  const rawAnswerIdx = typeof q.answer === 'number' ? q.answer : 0;
+  const rawOpt = (q.options && q.options[rawAnswerIdx]) ? String(q.options[rawAnswerIdx]) : '';
+  const optClean = rawOpt.replace(/^[a-d][.)-]\s*/i, '').replace(/\s+gate$/i, '').trim();
+
+  // 1. Logic gate shown: /logic gate shown/i
+  if (/(?:logic\s+)?gate\s*(?:is\s*)?shown/i.test(q.text) && !figure) {
+    const gateUpper = optClean.toUpperCase();
+    if (/^(AND|OR|NOT|NAND|NOR|XOR|XNOR)$/.test(gateUpper)) {
+      const spec = gateUpper === 'NOT' ? 'gate:NOT(A->Y)' : `gate:${gateUpper}(A,B->Y)`;
+      figure = renderDiagramSpecToSvgDataUri(spec);
+    }
+  }
+
+  // 2. Truth table shown: /truth table shown/i
+  if (/(?:truth\s+)?table\s*(?:is\s*)?shown/i.test(q.text) && (!stimulus || !stimulus.trim())) {
+    const gateUpper = optClean.toUpperCase();
+    const tables: Record<string, string> = {
+      AND: `| A | B | Y |\n|---|---|---|\n| 0 | 0 | 0 |\n| 0 | 1 | 0 |\n| 1 | 0 | 0 |\n| 1 | 1 | 1 |`,
+      OR: `| A | B | Y |\n|---|---|---|\n| 0 | 0 | 0 |\n| 0 | 1 | 1 |\n| 1 | 0 | 1 |\n| 1 | 1 | 1 |`,
+      NAND: `| A | B | Y |\n|---|---|---|\n| 0 | 0 | 1 |\n| 0 | 1 | 1 |\n| 1 | 0 | 1 |\n| 1 | 1 | 0 |`,
+      NOR: `| A | B | Y |\n|---|---|---|\n| 0 | 0 | 1 |\n| 0 | 1 | 0 |\n| 1 | 0 | 0 |\n| 1 | 1 | 0 |`,
+      XOR: `| A | B | Y |\n|---|---|---|\n| 0 | 0 | 0 |\n| 0 | 1 | 1 |\n| 1 | 0 | 1 |\n| 1 | 1 | 0 |`,
+      XNOR: `| A | B | Y |\n|---|---|---|\n| 0 | 0 | 1 |\n| 0 | 1 | 0 |\n| 1 | 0 | 0 |\n| 1 | 1 | 1 |`,
+    };
+    if (tables[gateUpper]) {
+      stimulus = tables[gateUpper];
+    }
+  }
+
+  // 3. 7-segment display: /digit is shown on the display/i
+  if (/digit\s*(?:is\s*)?shown\s*on\s*the\s*display/i.test(q.text) && !figure) {
+    const digitMatch = optClean.match(/\b([0-9a-f])\b/i);
+    if (digitMatch) {
+      figure = renderDiagramSpecToSvgDataUri(`seg7:${digitMatch[1]}`);
+    }
+  }
+
+  // 4. Digital device / flip-flop: /digital device shown|flip-flop shown/i
+  if (/(?:digital\s+)?device\s*(?:is\s*)?shown|flip-flop\s*(?:is\s*)?shown/i.test(q.text) && !figure) {
+    const dev = optClean.toLowerCase();
+    if (dev.includes('half adder')) {
+      figure = renderDiagramSpecToSvgDataUri('block:(A,B->Sum,Carry)');
+    } else if (dev.includes('full adder')) {
+      figure = renderDiagramSpecToSvgDataUri('block:(A,B,Cin->Sum,Cout)');
+    } else if (dev.includes('encoder')) {
+      figure = renderDiagramSpecToSvgDataUri('block:(I0,I1,I2,I3->Y0,Y1)');
+    } else if (dev.includes('decoder')) {
+      figure = renderDiagramSpecToSvgDataUri('block:(A,B->D0,D1,D2,D3)');
+    } else if (dev.includes('multiplexer') || dev.includes('mux')) {
+      figure = renderDiagramSpecToSvgDataUri('block:(I0,I1,I2,I3,S0,S1->Y)');
+    } else if (dev.includes('demultiplexer') || dev.includes('demux')) {
+      figure = renderDiagramSpecToSvgDataUri('block:(D,S0,S1->Y0,Y1,Y2,Y3)');
+    } else if (dev.includes('sr flip-flop') || dev.includes('sr-ff')) {
+      figure = renderDiagramSpecToSvgDataUri("block:(S,CLK,R->Q,Q')");
+    } else if (dev.includes('d flip-flop') || dev.includes('d-ff')) {
+      figure = renderDiagramSpecToSvgDataUri("block:(D,CLK->Q,Q')");
+    } else if (dev.includes('jk flip-flop') || dev.includes('jk-ff')) {
+      figure = renderDiagramSpecToSvgDataUri("block:(J,CLK,K->Q,Q')");
+    } else if (dev.includes('t flip-flop') || dev.includes('t-ff')) {
+      figure = renderDiagramSpecToSvgDataUri("block:(T,CLK->Q,Q')");
+    }
+  }
+
+  return { stimulus, figure };
+}
+
 export function normalizeExam(raw: any): Exam {
   const x = raw && typeof raw === 'object' ? raw : {};
   const seen = new Set();
@@ -1030,17 +1114,50 @@ export function normalizeExam(raw: any): Exam {
       seen.add(id);
       const n = String(q.n || i + 1);
       if (q.type === 'mcq') {
-        const opts = (Array.isArray(q.options) ? q.options : []).map((o: any) => String(o || '').trim()).filter(Boolean);
+        const opts = (Array.isArray(q.options) ? q.options : [])
+          .map((o: any) => stripAnswerLeak(String(o || '')).trim())
+          .filter(Boolean);
+
+        const textRaw = String(q.text || '');
+        let ans = typeof q.answer === 'number' ? q.answer : 0;
+        if (typeof q.answer === 'string') {
+          const lMatch = q.answer.match(/(?:Answer|Ans\s*[:.-]?)?\s*(?:\(([a-d])\)|([a-d]))/i);
+          if (lMatch) {
+            ans = (lMatch[1] || lMatch[2]).toUpperCase().charCodeAt(0) - 65;
+          } else if (/^\d+$/.test(q.answer.trim())) {
+            ans = parseInt(q.answer.trim(), 10);
+          }
+        }
+        const textAnsMatch = textRaw.match(/(?:\(?\s*(?:Answer|Ans)\s*[:.-]?\s*(?:\(([a-d])\)|([a-d]))\.?\s*\)?)(?:\*{1,2})?\s*$/i);
+        if (textAnsMatch && (q.answer === undefined || q.answer === 0)) {
+          const letter = (textAnsMatch[1] || textAnsMatch[2]).toUpperCase();
+          ans = letter.charCodeAt(0) - 65;
+        }
+
+        let text = stripAnswerLeak(textRaw);
+        let stimulus = q.stimulus ? stripAnswerLeak(String(q.stimulus)) : '';
+        let figure = normalizeFigure(q.figure);
+
+        const inferred = inferDiagramFromQuestion({
+          text,
+          options: opts,
+          answer: ans,
+          stimulus,
+          figure,
+        });
+        if (inferred.stimulus) stimulus = inferred.stimulus;
+        if (inferred.figure) figure = inferred.figure;
+
         return {
           id,
           n,
           type: 'mcq' as const,
-          stimulus: q.stimulus ? String(q.stimulus) : '',
-          text: String(q.text || ''),
-          figure: normalizeFigure(q.figure),
+          stimulus: stimulus || '',
+          text,
+          figure,
           options: opts.length ? opts : ['Option 1', 'Option 2'],
           optionFigures: Array.isArray(q.optionFigures) ? q.optionFigures : undefined,
-          answer: typeof q.answer === 'number' ? q.answer : 0,
+          answer: ans,
           guessed: !!q.guessed,
           marks: Number(q.marks) || 1,
         };
@@ -1049,7 +1166,7 @@ export function normalizeExam(raw: any): Exam {
         const parts = (Array.isArray(q.parts) ? q.parts : [])
           .map((p: any) => ({
             label: String(p.label || ''),
-            text: String(p.text || ''),
+            text: stripAnswerLeak(String(p.text || '')),
             marks: Number(p.marks) || 1,
             answer: p.answer ? String(p.answer) : undefined,
           }))
@@ -1058,7 +1175,7 @@ export function normalizeExam(raw: any): Exam {
           id,
           n,
           type: 'cq' as const,
-          stimulus: q.stimulus ? String(q.stimulus) : '',
+          stimulus: q.stimulus ? stripAnswerLeak(String(q.stimulus)) : '',
           figure: normalizeFigure(q.figure),
           parts: parts.length ? parts : [{ label: 'a', text: 'Answer the question', marks: 5 }],
         };
@@ -1067,8 +1184,8 @@ export function normalizeExam(raw: any): Exam {
         id,
         n,
         type: 'written' as const,
-        stimulus: q.stimulus ? String(q.stimulus) : undefined,
-        text: String(q.text || ''),
+        stimulus: q.stimulus ? stripAnswerLeak(String(q.stimulus)) : undefined,
+        text: stripAnswerLeak(String(q.text || '')),
         figure: normalizeFigure(q.figure),
         marks: Number(q.marks) || 1,
         answer: q.answer ? String(q.answer) : undefined,
@@ -1102,6 +1219,8 @@ export function examJsonPrompt(content: string): string {
 }
 
 CRITICAL: Extract ALL questions present in the document. Do not output placeholder questions. If no questions are found, return {"questions": []}.
+NEVER include 'Answer: X' inside question text, stimulus, or options. Parse 'Answer: A/B/C/D' into the numeric "answer" index (0, 1, 2, or 3).
+Keep output compact so all 50 questions fit fast: for logic gates use "figure": "gate:AND(A,B->Y)" (or OR/NOT/NAND/NOR/XOR/XNOR); for truth tables put a compact Markdown table in "stimulus"; for 7-segment displays use "figure": "seg7:3"; for device/flip-flop blocks use "figure": "block:(A,B,Cin->Sum,Cout)"; for binary/hex/octal boxes use "figure": "boxes:1011(8,4,2,1)" or "boxes:3|C".
 NEVER output raw <svg> XML tags inside JSON (they waste tokens and break JSON escaping). Instead, for visual/picture questions:
 - For tables (truth tables, place-value tables), put a Markdown pipe table in "stimulus".
 - For logic gates, set "figure" to "gate:AND(A,B->Y)", "gate:OR(A,B->Y)", "gate:NOT(A->Y)", "gate:NAND(A,B->Y)", "gate:NOR(A,B->Y)", "gate:XOR(A,B->Y)", or "gate:XNOR(A,B->Y)" (matching the picture's gate shape and input/output labels).

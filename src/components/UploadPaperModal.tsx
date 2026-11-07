@@ -5,48 +5,6 @@ import { callAI, EXAM_JSON_SYSTEM, examJsonPrompt, normalizeExam, extractFileTex
 import { uid } from '../utils/date';
 import { isProUser, canSaveAiResource, FREE_TIER_MAX_SAVED_RESOURCES } from '../utils/tierLimits';
 import { savePaperBlob } from '../utils/paperStorage';
-import { Question } from '../types';
-
-export function parseAnswerKeys(input: string, count: number): Record<number, number> {
-  const map: Record<number, number> = {};
-  if (!input || !input.trim()) return map;
-
-  const letterToIdx = (l: string): number => {
-    const code = l.toUpperCase().charCodeAt(0);
-    return code >= 65 && code <= 68 ? code - 65 : 0; // A=0, B=1, C=2, D=3
-  };
-
-  // 1. Try matching numbered lines: "1. B", "1: C", "1) A", "Q1: B", "1 - B", "Answer 1: B"
-  const numberedRegex = /(?:(?:q(?:uestion)?|answer)\s*)?(\d+)\s*[:.)-]\s*([a-d])/gi;
-  let match: RegExpExecArray | null;
-  let foundNumbered = false;
-
-  while ((match = numberedRegex.exec(input)) !== null) {
-    foundNumbered = true;
-    const qNum = parseInt(match[1], 10);
-    if (qNum >= 1 && qNum <= count) {
-      map[qNum - 1] = letterToIdx(match[2]);
-    }
-  }
-
-  if (foundNumbered && Object.keys(map).length > 0) {
-    return map;
-  }
-
-  // 2. Try space or comma separated letters: "B C A D B..." or "A, B, C, D"
-  const tokens = input
-    .replace(/[^a-dA-D\s,]/g, ' ')
-    .split(/[\s,]+/)
-    .filter(t => t.length === 1 && /^[a-dA-D]$/i.test(t));
-
-  tokens.forEach((token, idx) => {
-    if (idx < count) {
-      map[idx] = letterToIdx(token);
-    }
-  });
-
-  return map;
-}
 
 interface UploadPaperModalProps {
   isOpen: boolean;
@@ -65,10 +23,6 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
   const [studentId, setStudentId] = useState(initialStudentId || '');
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [mode, setMode] = useState<'instant' | 'ai'>('instant');
-  const [questionCount, setQuestionCount] = useState<number>(50);
-  const [duration, setDuration] = useState<number>(50);
-  const [answerKeyInput, setAnswerKeyInput] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -77,10 +31,6 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
       setStudentId(initialStudentId || '');
       setTitle('');
       setFile(null);
-      setMode('instant');
-      setQuestionCount(50);
-      setDuration(50);
-      setAnswerKeyInput('');
       setError('');
     }
   }, [isOpen, initialStudentId]);
@@ -95,8 +45,6 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
       if (!title) {
         setTitle(f.name.replace(/\.[^.]+$/, ''));
       }
-      const isPdfOrImg = /\.(pdf|png|jpe?g|webp)$/i.test(f.name);
-      setMode(isPdfOrImg ? 'instant' : 'ai');
     }
   };
 
@@ -132,81 +80,6 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
     const examId = uid();
     const now = new Date().toISOString();
 
-    if (mode === 'instant') {
-      try {
-        let fullDataUrl = '';
-        if (isPdf || isImage) {
-          fullDataUrl = await toDataUrl(file);
-          await savePaperBlob(examId, fullDataUrl);
-          await savePaperBlob(docId, fullDataUrl);
-        }
-
-        const answerMap = parseAnswerKeys(answerKeyInput, questionCount);
-        const questions: Question[] = Array.from({ length: questionCount }, (_, idx) => {
-          const hasKey = idx in answerMap;
-          const ans = hasKey ? answerMap[idx] : 0;
-          return {
-            id: `q${idx + 1}`,
-            n: String(idx + 1),
-            type: 'mcq' as const,
-            stimulus: '',
-            text: `Question ${idx + 1}`,
-            options: ['Option A', 'Option B', 'Option C', 'Option D'],
-            answer: ans,
-            guessed: !hasKey,
-            marks: 1,
-          };
-        });
-
-        const paperMd = `# ${examTitle}\n\nOriginal question paper attached. Answer questions 1 to ${questionCount} below.`;
-
-        saveDoc({
-          id: docId,
-          type: 'exam',
-          title: examTitle,
-          content: paperMd,
-          studentId: studentId || null,
-          createdAt: now,
-        });
-
-        saveAiResource({
-          id: docId,
-          title: examTitle,
-          type: 'exam',
-          classLevel: '',
-          subject: '',
-          topic: '',
-          content: paperMd,
-          studentId: studentId || null,
-          createdAt: now,
-          isFavorite: false,
-        });
-
-        saveExam({
-          id: examId,
-          docId,
-          title: examTitle,
-          duration,
-          instructions: 'Refer to original question paper and mark answers on the OMR sheet.',
-          cqChoose: 0,
-          questions,
-          createdAt: now,
-        });
-
-        toast(`"${examTitle}" question bank ready!`, 'success');
-        onClose();
-        if (onExamReady) {
-          onExamReady(docId, examId);
-        }
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Failed to create instant question bank.');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     let fullDataUrl = '';
     try {
       let textContent = '';
@@ -231,6 +104,10 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
 
       const parsedJson = parseAiJson(res);
       const normalized = normalizeExam(parsedJson);
+
+      if (!normalized.questions || normalized.questions.length === 0) {
+        throw new Error('AI could not extract valid questions from this document. Please ensure the paper has numbered questions.');
+      }
 
       const paperMd = textContent.trim() || normalized.questions.map((q, idx) => {
         const visual = `${'stimulus' in q && q.stimulus && q.type !== 'cq' ? q.stimulus + '\n' : ''}${q.figure ? `![Figure](${q.figure})\n` : ''}`;
@@ -286,77 +163,8 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
       }
     } catch (err: any) {
       console.error(err);
-      if (isPdf || isImage) {
-        try {
-          toast('AI extraction failed. Creating Instant Question Bank + OMR sheet instead...', 'info');
-          if (fullDataUrl) {
-            await savePaperBlob(examId, fullDataUrl);
-            await savePaperBlob(docId, fullDataUrl);
-          }
-          const answerMap = parseAnswerKeys(answerKeyInput, questionCount);
-          const questions: Question[] = Array.from({ length: questionCount }, (_, idx) => {
-            const hasKey = idx in answerMap;
-            const ans = hasKey ? answerMap[idx] : 0;
-            return {
-              id: `q${idx + 1}`,
-              n: String(idx + 1),
-              type: 'mcq' as const,
-              stimulus: '',
-              text: `Question ${idx + 1}`,
-              options: ['Option A', 'Option B', 'Option C', 'Option D'],
-              answer: ans,
-              guessed: !hasKey,
-              marks: 1,
-            };
-          });
-
-          const paperMd = `# ${examTitle}\n\nOriginal question paper attached. Answer questions 1 to ${questionCount} below.`;
-
-          saveDoc({
-            id: docId,
-            type: 'exam',
-            title: examTitle,
-            content: paperMd,
-            studentId: studentId || null,
-            createdAt: now,
-          });
-
-          saveAiResource({
-            id: docId,
-            title: examTitle,
-            type: 'exam',
-            classLevel: '',
-            subject: '',
-            topic: '',
-            content: paperMd,
-            studentId: studentId || null,
-            createdAt: now,
-            isFavorite: false,
-          });
-
-          saveExam({
-            id: examId,
-            docId,
-            title: examTitle,
-            duration,
-            instructions: 'Refer to original question paper and mark answers on the OMR sheet.',
-            cqChoose: 0,
-            questions,
-            createdAt: now,
-          });
-
-          toast(`"${examTitle}" question bank ready!`, 'success');
-          onClose();
-          if (onExamReady) {
-            onExamReady(docId, examId);
-          }
-          return;
-        } catch (fallbackErr: any) {
-          setError(fallbackErr.message || 'Failed to process question paper.');
-        }
-      } else {
-        setError(err.message || 'Failed to read and process the question paper.');
-      }
+      setError(err.message || 'Failed to read and process the question paper.');
+      toast(err.message || 'Failed to process question paper with AI.', 'error');
     } finally {
       setLoading(false);
     }
@@ -375,78 +183,8 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
           />
         </label>
         <p className="help" style={{ margin: 0 }}>
-          Upload any PDF or image question paper to instantly generate an interactive test or extract full text.
+          Upload any PDF or image question paper to extract full questions, diagrams, and options.
         </p>
-
-        <div className="field">
-          <label style={{ fontWeight: 600 }}>Processing Mode</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="paperMode"
-                value="instant"
-                checked={mode === 'instant'}
-                onChange={() => setMode('instant')}
-              />
-              <span>
-                <strong>Instant Question Bank + OMR Sheet</strong> (Recommended for PDFs — 0s wait)
-              </span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="paperMode"
-                value="ai"
-                checked={mode === 'ai'}
-                onChange={() => setMode('ai')}
-              />
-              <span>
-                <strong>AI Full Text Extraction</strong> (Converts text & diagrams — takes 15–35s)
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {mode === 'instant' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--card2)', padding: '12px', borderRadius: '8px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <label className="field" style={{ margin: 0 }}>
-                Number of Questions
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={questionCount}
-                  onChange={e => setQuestionCount(Math.max(1, parseInt(e.target.value) || 1))}
-                />
-              </label>
-              <label className="field" style={{ margin: 0 }}>
-                Time Allowed (minutes)
-                <input
-                  type="number"
-                  min={1}
-                  max={300}
-                  value={duration}
-                  onChange={e => setDuration(Math.max(1, parseInt(e.target.value) || 1))}
-                />
-              </label>
-            </div>
-            <label className="field" style={{ margin: 0 }}>
-              Answer Key (optional)
-              <textarea
-                rows={2}
-                value={answerKeyInput}
-                onChange={e => setAnswerKeyInput(e.target.value)}
-                placeholder="e.g. B C B C B... or 1. B, 2. C (auto-marks answers)"
-                style={{ fontSize: '0.85rem' }}
-              />
-              <span className="help" style={{ margin: '4px 0 0' }}>
-                Paste comma/space-separated letters (A-D) or numbered list. You can also set/adjust answers later.
-              </span>
-            </label>
-          </div>
-        )}
 
         <label className="field">
           Title
@@ -479,7 +217,7 @@ export const UploadPaperModal: React.FC<UploadPaperModalProps> = ({
             Cancel
           </button>
           <button type="submit" className="btn primary" disabled={loading}>
-            {loading ? 'Processing paper…' : mode === 'instant' ? 'Create Question Bank (0s)' : 'Read paper with AI'}
+            {loading ? 'Reading PDF & extracting 50 questions + diagrams with AI (10–25s)...' : 'Read paper with AI'}
           </button>
         </div>
       </form>

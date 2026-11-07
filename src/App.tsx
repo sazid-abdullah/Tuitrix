@@ -494,6 +494,7 @@ export const App: React.FC = () => {
                 const isDummyExam = (ex: any) => {
                   if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) return true;
                   if (ex.questions.length === 1 && /sample mcq|question text/i.test(ex.questions[0]?.text || '')) return true;
+                  if (ex.questions[0]?.text === 'Question 1' && ex.questions[0]?.options?.[0] === 'Option A') return true;
                   return false;
                 };
                 let existingExam = state.exams.find(e => 

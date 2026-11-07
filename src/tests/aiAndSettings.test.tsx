@@ -18,6 +18,8 @@ import {
   renderMarkdown,
   parseAiJson,
   renderDiagramSpecToSvgDataUri,
+  stripAnswerLeak,
+  inferDiagramFromQuestion,
 } from '../services/ai';
 import { AIView } from '../views/AIView';
 import { lazyWithRetry } from '../App';
@@ -509,6 +511,14 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
         questions: [{ id: 'q1', type: 'mcq', text: 'Question Text Here' }],
       })
     ).toBe(true);
+    expect(
+      isDummyExam({
+        questions: [
+          { id: 'q1', type: 'mcq', text: 'Question 1', options: ['Option A', 'Option B'] },
+          { id: 'q2', type: 'mcq', text: 'Question 2', options: ['Option A', 'Option B'] },
+        ],
+      })
+    ).toBe(true);
 
     // Valid real questions should NOT be flagged as dummy
     expect(
@@ -906,6 +916,165 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
         expect(sessionStorage.getItem('tuitrix_chunk_reload')).toBe('1');
         expect(reloadMock).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('Automatic Diagram & Truth Table Synthesis and Answer Leak Stripping', () => {
+    it('strips Answer: X leaks from question text, options, and stimulus while extracting answer index', () => {
+      expect(stripAnswerLeak('What is the SI unit of power? Answer: C')).toBe('What is the SI unit of power?');
+      expect(stripAnswerLeak('Which gate is shown? (Ans: B)')).toBe('Which gate is shown?');
+      expect(stripAnswerLeak('Option A Answer: A')).toBe('Option A');
+      expect(stripAnswerLeak('**Answer: D**')).toBe('');
+
+      const rawExam = {
+        title: 'Leak Test Exam',
+        questions: [
+          {
+            type: 'mcq',
+            n: '1',
+            text: 'What is the voltage across the resistor? Answer: B',
+            options: ['2V', '4V Answer: B', '6V', '8V'],
+            answer: 0, // AI left answer at 0, but text says Answer: B
+            marks: 1,
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      expect((normalized.questions[0] as any).text).toBe('What is the voltage across the resistor?');
+      expect((normalized.questions[0] as any).options[1]).toBe('4V');
+      expect((normalized.questions[0] as any).answer).toBe(1); // Extracted 'B' -> 1
+    });
+
+    it('synthesizes logic gate SVG when missing for logic gate questions', () => {
+      const rawExam = {
+        title: 'Logic Gate Test',
+        questions: [
+          {
+            type: 'mcq',
+            n: '1',
+            text: 'Which logic gate shown below in the diagram has two inputs?',
+            options: ['OR', 'AND', 'NAND', 'NOR'],
+            answer: 2, // NAND
+            figure: '',
+            stimulus: '',
+          },
+          {
+            type: 'mcq',
+            n: '2',
+            text: 'Identify the logic gate shown:',
+            options: ['NOT', 'BUFFER'],
+            answer: 0, // NOT
+            figure: '',
+            stimulus: '',
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      const q1 = normalized.questions[0] as any;
+      expect(q1.figure).toBeDefined();
+      expect(q1.figure).toContain('data:image/svg+xml');
+      const decodedQ1 = decodeURIComponent(q1.figure);
+      // NAND body has inversion bubble
+      expect(decodedQ1).toContain('circle');
+
+      const q2 = normalized.questions[1] as any;
+      expect(q2.figure).toBeDefined();
+      expect(q2.figure).toContain('data:image/svg+xml');
+      const decodedQ2 = decodeURIComponent(q2.figure);
+      expect(decodedQ2).toContain('>A<');
+      expect(decodedQ2).toContain('>Y<');
+      expect(decodedQ2).toContain('circle');
+    });
+
+    it('synthesizes truth table Markdown table when missing for truth table questions', () => {
+      const rawExam = {
+        title: 'Truth Table Test',
+        questions: [
+          {
+            type: 'mcq',
+            n: '1',
+            text: 'Which gate corresponds to the truth table shown?',
+            options: ['AND', 'OR', 'XOR', 'XNOR'],
+            answer: 2, // XOR
+            stimulus: '',
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      const q1 = normalized.questions[0] as any;
+      expect(q1.stimulus).toBeDefined();
+      expect(q1.stimulus).toContain('| A | B | Y |');
+      // XOR output rows: 0 0 0, 0 1 1, 1 0 1, 1 1 0
+      expect(q1.stimulus).toContain('| 0 | 0 | 0 |');
+      expect(q1.stimulus).toContain('| 0 | 1 | 1 |');
+      expect(q1.stimulus).toContain('| 1 | 0 | 1 |');
+      expect(q1.stimulus).toContain('| 1 | 1 | 0 |');
+    });
+
+    it('synthesizes 7-segment display when missing for display questions', () => {
+      const rawExam = {
+        title: '7-Segment Test',
+        questions: [
+          {
+            type: 'mcq',
+            n: '1',
+            text: 'Which digit is shown on the display?',
+            options: ['1', '3', '5', '7'],
+            answer: 1, // '3'
+            figure: '',
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      const q1 = normalized.questions[0] as any;
+      expect(q1.figure).toBeDefined();
+      expect(q1.figure).toContain('data:image/svg+xml');
+      const decoded = decodeURIComponent(q1.figure);
+      expect(decoded).toContain('viewBox="0 0 120 160"');
+    });
+
+    it('synthesizes digital device / flip-flop block diagram when missing', () => {
+      const rawExam = {
+        title: 'Device & Flip-Flop Test',
+        questions: [
+          {
+            type: 'mcq',
+            n: '1',
+            text: 'Which digital device shown below performs addition of 3 bits?',
+            options: ['Half adder', 'Full adder', 'Decoder', 'Multiplexer'],
+            answer: 1, // Full adder
+            figure: '',
+          },
+          {
+            type: 'mcq',
+            n: '2',
+            text: 'Which flip-flop shown below has inputs S and R?',
+            options: ['SR flip-flop', 'JK flip-flop', 'D flip-flop', 'T flip-flop'],
+            answer: 0, // SR flip-flop
+            figure: '',
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      const q1 = normalized.questions[0] as any;
+      expect(q1.figure).toBeDefined();
+      expect(q1.figure).toContain('data:image/svg+xml');
+      const decodedQ1 = decodeURIComponent(q1.figure);
+      expect(decodedQ1).toContain('>Cin<');
+      expect(decodedQ1).toContain('>Sum<');
+      expect(decodedQ1).toContain('>Cout<');
+
+      const q2 = normalized.questions[1] as any;
+      expect(q2.figure).toBeDefined();
+      expect(q2.figure).toContain('data:image/svg+xml');
+      const decodedQ2 = decodeURIComponent(q2.figure);
+      expect(decodedQ2).toContain('>CLK<');
+      expect(decodedQ2).toContain(">Q'<");
     });
   });
 });
