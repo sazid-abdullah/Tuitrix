@@ -78,21 +78,34 @@ export function autoModel(provider: 'gemini' | 'groq' | 'openrouter' | 'ollama',
   return getDefaultModel(provider);
 }
 
+export function sanitizeSvgInJson(s: string): string {
+  if (!s || !s.includes('<svg')) return s;
+  return s.replace(/<svg[\s\S]*?<\/svg>/gi, (svgBlock) => {
+    let clean = svgBlock.replace(/[\r\n\t]+/g, ' ');
+    clean = clean.replace(/=\s*(?:\\*"|")([^">]*?)(?:\\*"|")/g, (m, val) => {
+      const trimmed = val.replace(/^\\+/, '').replace(/\\+$/, '');
+      return `='${trimmed}'`;
+    });
+    return clean;
+  });
+}
+
 export function parseAiJson(raw: string): any {
-  const t = String(raw || '').trim();
+  const sanitize = (str: string) => sanitizeSvgInJson(str);
+  const t = sanitize(String(raw || '').trim());
   // 1. Try direct parse first
   try { return JSON.parse(t); } catch {}
   // 2. Strip markdown code fences if present
   const fenceMatch = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenceMatch) {
-    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+    try { return JSON.parse(sanitize(fenceMatch[1].trim())); } catch {}
   }
   // 3. Extract outermost JSON object { ... }
   const firstBrace = t.indexOf('{');
   const lastBrace = t.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     const candidate = t.slice(firstBrace, lastBrace + 1);
-    try { return JSON.parse(candidate); } catch {}
+    try { return JSON.parse(sanitize(candidate)); } catch {}
   }
   // 4. Truncation recovery for questions array
   if (firstBrace !== -1 && t.includes('"questions"')) {
@@ -105,7 +118,7 @@ export function parseAiJson(raw: string): any {
         if (lastValidBrace === -1 || lastValidBrace <= arrayStart) break;
         const candidate = t.slice(firstBrace, lastValidBrace + 1) + ']}';
         try {
-          const parsed = JSON.parse(candidate);
+          const parsed = JSON.parse(sanitize(candidate));
           if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
             return parsed;
           }
@@ -1281,6 +1294,54 @@ export function inferDiagramFromQuestion(q: {
   return { stimulus, figure };
 }
 
+export function normalizeSvgString(svgStr: string): string {
+  let s = String(svgStr || '').trim();
+  if (!/^<svg/i.test(s)) return s;
+
+  const svgOpenMatch = s.match(/^<svg([^>]*)>/i);
+  if (!svgOpenMatch) return s;
+  let attrs = svgOpenMatch[1];
+  const rest = s.slice(svgOpenMatch[0].length);
+
+  // Ensure xmlns
+  if (!/xmlns\s*=/i.test(attrs)) {
+    attrs = ` xmlns="http://www.w3.org/2000/svg"${attrs}`;
+  }
+
+  // Ensure viewBox
+  let vbMatch = attrs.match(/viewBox\s*=\s*['"]\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)\s*['"]/i);
+  if (!vbMatch) {
+    attrs = `${attrs} viewBox="0 0 260 140"`;
+    vbMatch = attrs.match(/viewBox\s*=\s*['"]\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)\s*['"]/i);
+  }
+
+  // Ensure width and height
+  const w = vbMatch ? Math.round(parseFloat(vbMatch[3])) || 260 : 260;
+  const h = vbMatch ? Math.round(parseFloat(vbMatch[4])) || 140 : 140;
+
+  if (!/\bwidth\s*=/i.test(attrs)) {
+    attrs = ` width="${w}"${attrs}`;
+  }
+  if (!/\bheight\s*=/i.test(attrs)) {
+    attrs = ` height="${h}"${attrs}`;
+  }
+
+  let fullSvg = `<svg${attrs}>${rest}`;
+
+  // Replace black/dark strokes and fills
+  fullSvg = fullSvg
+    .replace(/stroke\s*=\s*['"]\s*(?:black|#000|#000000)\s*['"]/gi, 'stroke="#38bdf8"')
+    .replace(/fill\s*=\s*['"]\s*(?:black|#000|#000000)\s*['"]/gi, 'fill="#e2e8f0"');
+
+  // Inject style if #38bdf8 is not present
+  if (!fullSvg.includes('#38bdf8')) {
+    const styleTag = '<style>svg{color:#e2e8f0} text{fill:#e2e8f0;font-family:system-ui,sans-serif} line,path,circle,rect,polygon,polyline{stroke:#38bdf8}</style>';
+    fullSvg = fullSvg.replace(/^(<svg[^>]*>)/i, `$1${styleTag}`);
+  }
+
+  return fullSvg;
+}
+
 export function normalizeExam(raw: any): Exam {
   const x = raw && typeof raw === 'object' ? raw : {};
   const seen = new Set();
@@ -1291,7 +1352,8 @@ export function normalizeExam(raw: any): Exam {
     const diagramUri = renderDiagramSpecToSvgDataUri(str);
     if (diagramUri) return diagramUri;
     if (/^<svg/i.test(str)) {
-      return 'data:image/svg+xml;utf8,' + encodeURIComponent(str);
+      const normalizedSvg = normalizeSvgString(str);
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(normalizedSvg);
     }
     return str;
   };
@@ -1409,12 +1471,10 @@ export function examJsonPrompt(content: string): string {
 
 CRITICAL: Extract ALL questions present in the document. Do not output placeholder questions. If no questions are found, return {"questions": []}.
 NEVER include 'Answer: X' inside question text, stimulus, or options. Parse 'Answer: A/B/C/D' into the numeric "answer" index (0, 1, 2, or 3).
-Keep output compact so all 50 questions fit fast: for logic gates use "figure": "gate:AND(A,B->Y)" (or OR/NOT/NAND/NOR/XOR/XNOR); for truth tables put a compact Markdown table in "stimulus"; for 7-segment displays use "figure": "seg7:3"; for device/flip-flop blocks use "figure": "block:(A,B,Cin->Sum,Cout)"; for binary/hex/octal boxes use "figure": "boxes:1011(8,4,2,1)" or "boxes:3|C".
-NEVER output raw <svg> XML tags inside JSON (they waste tokens and break JSON escaping). Instead, for visual/picture questions:
-- For tables (truth tables, place-value tables), put a Markdown pipe table in "stimulus".
-- For logic gates, set "figure" to "gate:AND(A,B->Y)", "gate:OR(A,B->Y)", "gate:NOT(A->Y)", "gate:NAND(A,B->Y)", "gate:NOR(A,B->Y)", "gate:XOR(A,B->Y)", or "gate:XNOR(A,B->Y)" (matching the picture's gate shape and input/output labels).
-- For digital device/flip-flop blocks, set "figure" to "block:(Pin1,Pin2->Out1,Out2)" listing only the visible pin labels.
-- For 7-segment displays, set "figure" to "seg7:3" (with the lit digit). For number boxes, set "figure" to "boxes:3|C" or put the expression/circuit in "stimulus".
+For tables in ANY subject (data tables, truth tables, accounting ledgers, matrices), put a Markdown pipe table in "stimulus".
+For visual diagrams in ANY subject (Physics circuits/vectors/inclined planes/optics, Math geometry/triangles/graphs/Venn diagrams, Chemistry structures, Biology diagrams, or ICT logic gates):
+  1) You may use compact single-quoted inline SVG in "figure" (MUST use single quotes for all SVG attributes so JSON never breaks, e.g. "figure": "<svg viewBox='0 0 260 140'><polygon points='40,110 200,110 40,30' fill='none' stroke='#38bdf8' stroke-width='2'/><text x='120' y='128' fill='#e2e8f0' font-size='13'>12 cm</text></svg>"), OR
+  2) For digital logic shorthand, you may use "gate:AND(A,B->Y)", "circuit:AND,OR(A,B,C->Z)", "block:(A,B->Sum,Carry)", "seg7:3", or "boxes:3|C".
 
 <<<PAPER
 ${content}

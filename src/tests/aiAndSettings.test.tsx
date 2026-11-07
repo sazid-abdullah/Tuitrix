@@ -17,6 +17,8 @@ import {
   examJsonPrompt,
   renderMarkdown,
   parseAiJson,
+  sanitizeSvgInJson,
+  normalizeSvgString,
   renderDiagramSpecToSvgDataUri,
   stripAnswerLeak,
   inferDiagramFromQuestion,
@@ -704,12 +706,12 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
     // Verify q1 MCQ:
     const q1 = normalized.questions[0] as any;
     expect(q1.stimulus).toBe(truthTableStimulus);
-    expect(q1.figure).toBe(`data:image/svg+xml;utf8,${encodeURIComponent(rawSvg)}`);
+    expect(q1.figure).toBe(`data:image/svg+xml;utf8,${encodeURIComponent(normalizeSvgString(rawSvg))}`);
 
     // Verify q2 CQ:
     const q2 = normalized.questions[1] as any;
     expect(q2.stimulus).toBe(truthTableStimulus);
-    expect(q2.figure).toBe(`data:image/svg+xml;utf8,${encodeURIComponent(rawSvg)}`);
+    expect(q2.figure).toBe(`data:image/svg+xml;utf8,${encodeURIComponent(normalizeSvgString(rawSvg))}`);
 
     // Verify q3 Written:
     const q3 = normalized.questions[2] as any;
@@ -727,19 +729,16 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
     const prompt = examJsonPrompt('Logic gate test');
     expect(prompt).toContain('"figure": ""');
     expect(prompt).toContain(
-      'NEVER output raw <svg> XML tags inside JSON (they waste tokens and break JSON escaping). Instead, for visual/picture questions:'
+      'For tables in ANY subject (data tables, truth tables, accounting ledgers, matrices), put a Markdown pipe table in "stimulus".'
     );
     expect(prompt).toContain(
-      'For tables (truth tables, place-value tables), put a Markdown pipe table in "stimulus".'
+      'For visual diagrams in ANY subject (Physics circuits/vectors/inclined planes/optics, Math geometry/triangles/graphs/Venn diagrams, Chemistry structures, Biology diagrams, or ICT logic gates):'
     );
     expect(prompt).toContain(
-      'For logic gates, set "figure" to "gate:AND(A,B->Y)", "gate:OR(A,B->Y)", "gate:NOT(A->Y)", "gate:NAND(A,B->Y)", "gate:NOR(A,B->Y)", "gate:XOR(A,B->Y)", or "gate:XNOR(A,B->Y)"'
+      'You may use compact single-quoted inline SVG in "figure"'
     );
     expect(prompt).toContain(
-      'For digital device/flip-flop blocks, set "figure" to "block:(Pin1,Pin2->Out1,Out2)"'
-    );
-    expect(prompt).toContain(
-      'For 7-segment displays, set "figure" to "seg7:3" (with the lit digit). For number boxes, set "figure" to "boxes:3|C"'
+      'For digital logic shorthand, you may use "gate:AND(A,B->Y)", "circuit:AND,OR(A,B,C->Z)", "block:(A,B->Sum,Carry)", "seg7:3", or "boxes:3|C".'
     );
   });
 
@@ -1118,6 +1117,46 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
 
       const circuitSvg = decodeURIComponent(renderDiagramSpecToSvgDataUri('circuit:AND,OR(A,B,C->Z)')!);
       expect(circuitSvg).toContain('width="340" height="130"');
+    });
+
+    it('successfully parses JSON containing an <svg viewBox="0 0 200 120"> with unescaped double quotes inside figure', () => {
+      const rawAiWithUnescapedSvg = '{"title": "Physics Exam", "questions": [{"id": "q1", "type": "mcq", "text": "Find the force", "figure": "<svg viewBox="0 0 200 120">\n<line x1="10" y1="20" x2="100" y2="20" stroke="black" />\n</svg>", "options": ["10N", "20N"], "answer": 0}]}';
+      const parsed = parseAiJson(rawAiWithUnescapedSvg);
+      expect(parsed).toBeDefined();
+      expect(parsed.questions).toHaveLength(1);
+      expect(parsed.questions[0].figure).toContain("<svg viewBox='0 0 200 120'>");
+      expect(parsed.questions[0].figure).toContain("stroke='black'");
+    });
+
+    it('converts a Physics/Math <svg viewBox="0 0 240 120"> with stroke="black" into a high-contrast SVG URI with explicit width/height and #38bdf8', () => {
+      const rawExam = {
+        title: 'Math Geometry Exam',
+        questions: [
+          {
+            type: 'mcq',
+            n: '1',
+            text: 'What is the length of hypotenuse?',
+            options: ['5 cm', '10 cm', '13 cm', '15 cm'],
+            answer: 2,
+            figure: "<svg viewBox='0 0 240 120'><polygon points='40,110 200,110 40,30' fill='none' stroke='black' stroke-width='2'/><text x='120' y='128' fill='black'>12 cm</text></svg>",
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      const q1 = normalized.questions[0] as any;
+      expect(q1.figure).toBeDefined();
+      expect(q1.figure).toContain('data:image/svg+xml;utf8,');
+      const decoded = decodeURIComponent(q1.figure);
+      expect(decoded).toContain('width="240"');
+      expect(decoded).toContain('height="120"');
+      expect(decoded).toContain('xmlns="http://www.w3.org/2000/svg"');
+      expect(decoded).toContain('stroke="#38bdf8"');
+      expect(decoded).toContain('fill="#e2e8f0"');
+      expect(decoded).not.toContain("stroke='black'");
+      expect(decoded).not.toContain('stroke="black"');
+      expect(decoded).not.toContain("fill='black'");
+      expect(decoded).not.toContain('fill="black"');
     });
   });
 });

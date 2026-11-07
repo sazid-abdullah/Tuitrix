@@ -25,6 +25,8 @@ tags: [changelog, history, releases]
 - Implemented `purgeDummyRecords` in `src/store/context.tsx` to automatically purge stale `Question 1 / Option A` dummy exams, matching docs, and hanging attempts (`mw663ngzf313`) on startup and remote Firestore sync.
 - Implemented 2-stage combinational `circuit:` SVG renderer and expanded `inferDiagramFromQuestion` with place-value and number-base conversion boxes for Q18–Q26 & Q44–Q50.
 - Added retroactive diagram and table synthesis in `ExamView` & `ResultView` and updated `.exam-fig` schematic styling with dark background and constrained dimensions.
+- Implemented universal all-subject single-quoted `<svg>` instructions in `examJsonPrompt` and `sanitizeSvgInJson` in `parseAiJson` to recover unescaped double-quoted SVG attributes and collapsed newlines.
+- Added `normalizeSvgString` in `normalizeExam` guaranteeing `xmlns`, explicit `width`/`height` from `viewBox`, high-contrast `#38bdf8`/`#e2e8f0` styling, and fallback style injection for Physics, Math, Chemistry, and ICT diagrams.
 
 ## [2026-11-04] — Interactive Exam Scoring Sync, AI Mark Mapping, Board Exam Studio & AI Deep-Linking
 - Fixed `ResultView` AI mark mapping for non-CQ written questions (`q.id:0` to `q.id`), guarded empty typed answers in `handleAIMark`, and added live student profile score re-syncing on mark save.
