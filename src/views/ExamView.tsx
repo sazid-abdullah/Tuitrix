@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/context';
 import { fmtClock, bnNum, fmtN } from '../utils/date';
 import { renderMarkdown } from '../services/ai';
+import { getPaperBlob } from '../utils/paperStorage';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { Modal } from '../components/Modal';
 import { Question, MCQQuestion, CQQuestion, WrittenQuestion } from '../types';
@@ -32,6 +33,28 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
   const [flags, setFlags] = useState<string[]>(attempt?.flags || []);
   const [listModalOpen, setListModalOpen] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  const [paperUrl, setPaperUrl] = useState<string | null>(null);
+  const [paperOpen, setPaperOpen] = useState(true);
+
+  // Load original question paper blob if present
+  useEffect(() => {
+    let active = true;
+    if (exam) {
+      getPaperBlob(exam.id).then(blob => {
+        if (!active) return;
+        if (blob) {
+          setPaperUrl(blob);
+        } else if (exam.docId) {
+          getPaperBlob(exam.docId).then(docBlob => {
+            if (active && docBlob) setPaperUrl(docBlob);
+          });
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [exam?.id, exam?.docId]);
 
   // Set exam mode on document body
   useEffect(() => {
@@ -155,6 +178,63 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
       {exam.instructions && (
         <div className="notice" style={{ marginBottom: '16px' }}>
           {exam.instructions}
+        </div>
+      )}
+
+      {paperUrl && (
+        <div className="card" style={{ marginBottom: '16px', overflow: 'hidden' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+              fontWeight: 600,
+              padding: '4px 0',
+            }}
+            onClick={() => setPaperOpen(o => !o)}
+          >
+            <span>📄 Original Question Paper</span>
+            <button
+              type="button"
+              className="btn xs ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPaperOpen(o => !o);
+              }}
+            >
+              {paperOpen ? '▲ Hide paper' : '▼ Show paper'}
+            </button>
+          </div>
+          {paperOpen && (
+            <div style={{ marginTop: '10px' }}>
+              {paperUrl.startsWith('data:application/pdf') ? (
+                <iframe
+                  src={paperUrl}
+                  title="Original Question Paper"
+                  style={{
+                    width: '100%',
+                    height: '420px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                  }}
+                />
+              ) : (
+                <img
+                  src={paperUrl}
+                  alt="Original Question Paper"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '480px',
+                    display: 'block',
+                    margin: '0 auto',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 

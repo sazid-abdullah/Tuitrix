@@ -168,6 +168,10 @@ describe('UploadPaperModal - Student Sync, Quota & Markdown Reconstruction', () 
     const dummyPdf = new File(['dummy bytes'], 'exam_paper.pdf', { type: 'application/pdf' });
     fireEvent.change(fileInput, { target: { files: [dummyPdf] } });
 
+    // Switch to AI mode since PDF defaults to instant mode
+    const aiRadio = screen.getByLabelText(/AI Full Text Extraction/i);
+    fireEvent.click(aiRadio);
+
     const form = fileInput.closest('form')!;
     fireEvent.submit(form);
 
@@ -192,6 +196,57 @@ describe('UploadPaperModal - Student Sync, Quota & Markdown Reconstruction', () 
         studentId: 's_physics',
       })
     );
+  });
+
+  it('saves a 50-question interactive exam immediately without waiting for callAI in instant mode', async () => {
+    const mockStore = {
+      state: {
+        students: [{ id: 's_instant', name: 'Instant Student' }],
+        docs: [],
+        savedResources: [],
+      },
+      saveDoc: mockSaveDoc,
+      saveAiResource: mockSaveAiResource,
+      saveExam: mockSaveExam,
+      toast: mockToast,
+      billingState: { plan: 'pro' },
+      user: { email: 'tutor@test.com' },
+    };
+    vi.spyOn(context, 'useStore').mockReturnValue(mockStore as any);
+
+    const mockCallAI = vi.spyOn(aiServices, 'callAI');
+    render(
+      <UploadPaperModal
+        isOpen={true}
+        initialStudentId="s_instant"
+        onClose={mockClose}
+        onExamReady={mockExamReady}
+      />
+    );
+
+    const fileInput = screen.getByLabelText(/PDF, photo, Word or text file/i);
+    const dummyPdf = new File(['%PDF-1.4 mock stream'], 'board_paper.pdf', { type: 'application/pdf' });
+    fireEvent.change(fileInput, { target: { files: [dummyPdf] } });
+
+    // Verify instant mode radio is selected by default
+    const instantRadio = screen.getByLabelText(/Instant Question Bank \+ OMR Sheet/i) as HTMLInputElement;
+    expect(instantRadio.checked).toBe(true);
+
+    const form = fileInput.closest('form')!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockSaveDoc).toHaveBeenCalled();
+      expect(mockSaveExam).toHaveBeenCalled();
+    });
+
+    // Ensure callAI was NOT called
+    expect(mockCallAI).not.toHaveBeenCalled();
+
+    // Verify exam has 50 questions
+    const savedExamArg = mockSaveExam.mock.calls[0][0];
+    expect(savedExamArg.questions.length).toBe(50);
+    expect(savedExamArg.questions[0].options.length).toBe(4);
   });
 });
 

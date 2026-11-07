@@ -17,6 +17,8 @@ tags: [changelog, history, releases]
 - Supported Markdown image syntax `![alt](src)` in `renderMarkdown` and preserved `stimulus` tables and `figure` diagrams in `UploadPaperModal` `paperMd` reconstruction.
 - Implemented compact diagram spec renderer (`renderDiagramSpecToSvgDataUri`) supporting `gate:`, `block:`, `seg7:`, and `boxes:` without leaking answer text inside gate/block bodies, and raised default Gemini JSON `maxOutputTokens` to 32K.
 - Added step-4 truncation auto-recovery in `parseAiJson` for large `"questions"` arrays and wrapped lazy routes with `lazyWithRetry` in `App.tsx` for seamless deployment chunk cache recovery.
+- Added 35s AbortController timeout and 2-model file limit in `callAI` alongside IndexedDB `paperStorage.ts` for zero-Firestore blob persistence.
+- Added Instant Question Bank + OMR Mode in `UploadPaperModal.tsx`, split-screen PDF/image paper viewer in `ExamView.tsx`, and question count badges in `AIView.tsx`.
 
 ## [2026-11-04] — Interactive Exam Scoring Sync, AI Mark Mapping, Board Exam Studio & AI Deep-Linking
 - Fixed `ResultView` AI mark mapping for non-CQ written questions (`q.id:0` to `q.id`), guarded empty typed answers in `handleAIMark`, and added live student profile score re-syncing on mark save.

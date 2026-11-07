@@ -368,6 +368,7 @@ export async function callAI(
   const provider = state.ai.provider;
   const key = (state.ai.keys[provider] || '').trim();
   const model = autoModel(provider, state);
+  const timeoutMs = opts.files && opts.files.length > 0 ? 35000 : 30000;
 
   if (provider === 'gemini') {
     if (!key) throw new Error('Google Gemini API key is missing. Add your free key in Settings → AI.');
@@ -385,19 +386,27 @@ export async function callAI(
         },
       ];
 
-      return await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents,
-          generationConfig: {
-            temperature: opts.temperature ?? 0.6,
-            maxOutputTokens: opts.maxTokens || (opts.json ? 32768 : 8192),
-            ...(opts.json ? { responseMimeType: 'application/json' } : {}),
-          },
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        return await fetch(url, {
+          signal: controller.signal,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents,
+            generationConfig: {
+              temperature: opts.temperature ?? 0.6,
+              maxOutputTokens: opts.maxTokens || (opts.json ? 32768 : 8192),
+              ...(opts.json ? { responseMimeType: 'application/json' } : {}),
+            },
+          }),
+        });
+      } finally {
+        clearTimeout(timer);
+      }
     };
 
     const baseChain = [
@@ -412,12 +421,24 @@ export async function callAI(
     ];
     const hasJsonOrFiles = Boolean(opts.json || (opts.files && opts.files.length > 0));
     const filteredChain = hasJsonOrFiles ? baseChain.filter(m => !m.includes('gemma')) : baseChain;
-    const chain = Array.from(new Set(filteredChain.filter(Boolean)));
+    let chain = Array.from(new Set(filteredChain.filter(Boolean)));
+    if (opts.files && opts.files.length > 0) {
+      chain = chain.slice(0, 2);
+    }
 
     let res: Response | null = null;
     for (let i = 0; i < chain.length; i++) {
       const currentModel = chain[i];
-      res = await tryFetch(currentModel);
+      try {
+        res = await tryFetch(currentModel);
+      } catch (fetchErr: any) {
+        if (i < chain.length - 1) {
+          const nextModel = chain[i + 1];
+          opts.onFallback?.(`Switching from ${currentModel} to ${nextModel} (timed out or network error)...`);
+          continue;
+        }
+        throw fetchErr;
+      }
       if (res.ok) {
         break;
       }
@@ -454,20 +475,28 @@ export async function callAI(
   if (key) headers.Authorization = `Bearer ${key}`;
   if (provider === 'openrouter') headers['X-Title'] = 'Tuitrix';
 
-  const res = await fetch(urls[provider], {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      temperature: opts.temperature ?? 0.6,
-      max_tokens: opts.maxTokens || 4096,
-      response_format: opts.json ? { type: 'json_object' } : undefined,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(urls[provider], {
+      signal: controller.signal,
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: opts.temperature ?? 0.6,
+        max_tokens: opts.maxTokens || 4096,
+        response_format: opts.json ? { type: 'json_object' } : undefined,
+      }),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

@@ -773,6 +773,12 @@ export const AIView: React.FC<AIViewProps> = ({
                         {r.subject && <span className="badge">{r.subject}</span>}
                         <span className="badge ghost">{AI_TOOLS[r.type as keyof typeof AI_TOOLS] || r.type}</span>
                         {r.studentId && <span className="badge outline">{studentName(r.studentId)}</span>}
+                        {(() => {
+                          const matchingExam = (state.exams || []).find(e => (e.docId === r.id || e.id === r.id || (e.title && e.title.trim() === r.title.trim())) && Array.isArray(e.questions) && e.questions.length > 0);
+                          return matchingExam ? (
+                            <span className="badge green">{matchingExam.questions.length} Qs Ready</span>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="meta">
                         {[r.classLevel, r.topic, fmtDate(r.createdAt ? r.createdAt.split('T')[0] : '')]
