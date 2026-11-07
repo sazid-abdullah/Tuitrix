@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/context';
 import { fmtClock, bnNum, fmtN } from '../utils/date';
-import { renderMarkdown } from '../services/ai';
+import { renderMarkdown, inferDiagramFromQuestion } from '../services/ai';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { Modal } from '../components/Modal';
 import { Question, MCQQuestion, CQQuestion, WrittenQuestion } from '../types';
@@ -171,6 +171,11 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
       <div className="exam-body">
         {exam.questions.map((q: Question, qIdx: number) => {
           const isFlagged = flags.includes(q.id);
+          const inferred = (q.type === 'mcq' && !q.figure && !('stimulus' in q && q.stimulus))
+            ? inferDiagramFromQuestion(q)
+            : null;
+          const stim = ('stimulus' in q && q.stimulus) || inferred?.stimulus;
+          const fig = q.figure || inferred?.figure;
 
           return (
             <div key={q.id} id={`eq-${q.id}`} className="card exam-q">
@@ -193,19 +198,18 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
                 </button>
               </div>
 
-              {'stimulus' in q && q.stimulus && (
+              {stim && (
                 <div
                   className="doc exam-stim"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(q.stimulus) }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(stim) }}
                 />
               )}
 
-              {q.figure && (
+              {fig && (
                 <img
                   className="exam-fig"
-                  src={q.figure}
+                  src={fig}
                   alt="Figure"
-                  style={{ maxWidth: '100%', margin: '10px 0' }}
                 />
               )}
 

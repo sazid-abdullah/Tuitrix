@@ -1076,5 +1076,48 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
       expect(decodedQ2).toContain('>CLK<');
       expect(decodedQ2).toContain(">Q'<");
     });
+
+    it('synthesizes 2-stage circuit diagram for Boolean circuit questions', () => {
+      const result = inferDiagramFromQuestion({
+        text: 'Which boolean expression does the circuit represent?',
+        options: ['(A+B)·C', 'A·B+C', '(A⊕B)·C', '(A·B)\'·C'],
+        answer: 1, // A·B+C
+      });
+
+      expect(result.figure).toBeDefined();
+      expect(result.figure).toContain('data:image/svg+xml');
+      const decoded = decodeURIComponent(result.figure!);
+      expect(decoded).toContain('width="340" height="130"');
+      expect(decoded).toContain('A 25 25 0 0 1');
+      expect(decoded).toContain('>Z<');
+    });
+
+    it('synthesizes number conversion boxes:7|2 for Q49 octal-to-binary question', () => {
+      const result = inferDiagramFromQuestion({
+        text: 'Convert the octal number to binary:',
+        options: ['111 001', '111 010', '110 010', '101 010'],
+        answer: 1, // 111 010 -> 7, 2 -> 7|2
+      });
+
+      expect(result.figure).toBeDefined();
+      expect(result.figure).toContain('data:image/svg+xml');
+      const decoded = decodeURIComponent(result.figure!);
+      expect(decoded).toContain('>7<');
+      expect(decoded).toContain('>2<');
+    });
+
+    it('generates explicit SVG width and height attributes in renderDiagramSpecToSvgDataUri', () => {
+      const gateSvg = decodeURIComponent(renderDiagramSpecToSvgDataUri('gate:AND(A,B->Y)')!);
+      expect(gateSvg).toContain('width="260" height="110"');
+
+      const blockSvg = decodeURIComponent(renderDiagramSpecToSvgDataUri('block:(A->B)')!);
+      expect(blockSvg).toContain('width="260" height="120"');
+
+      const seg7Svg = decodeURIComponent(renderDiagramSpecToSvgDataUri('seg7:8')!);
+      expect(seg7Svg).toContain('width="120" height="160"');
+
+      const circuitSvg = decodeURIComponent(renderDiagramSpecToSvgDataUri('circuit:AND,OR(A,B,C->Z)')!);
+      expect(circuitSvg).toContain('width="340" height="130"');
+    });
   });
 });

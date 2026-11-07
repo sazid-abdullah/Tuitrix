@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/context';
 import { fmtDate, fmtN, uid, todayISO } from '../utils/date';
-import { renderMarkdown, callAI, MARK_SYSTEM, markPrompt, parseAiJson } from '../services/ai';
+import { renderMarkdown, callAI, MARK_SYSTEM, markPrompt, parseAiJson, inferDiagramFromQuestion } from '../services/ai';
 import { publishSharedExamResult, fetchSharedExamResult } from '../services/firebase';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { Question, Exam } from '../types';
@@ -663,6 +663,9 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                 if (q.type !== 'mcq') return null;
                 const studentChoice = attempt.answers[q.id];
                 const isCorrect = q.answer != null && studentChoice === q.answer;
+                const inferred = (!q.figure && !q.stimulus) ? inferDiagramFromQuestion(q) : null;
+                const stim = q.stimulus || inferred?.stimulus;
+                const fig = q.figure || inferred?.figure;
 
                 return (
                   <div key={q.id} className="row">
@@ -670,6 +673,20 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                       <div className="title">
                         <b>{q.n}.</b> {q.text}
                       </div>
+                      {stim && (
+                        <div
+                          className="doc exam-stim"
+                          style={{ margin: '8px 0' }}
+                          dangerouslySetInnerHTML={{ __html: renderMarkdown(stim) }}
+                        />
+                      )}
+                      {fig && (
+                        <img
+                          className="exam-fig"
+                          src={fig}
+                          alt="Figure"
+                        />
+                      )}
                       <div className="meta">
                         Student answered:{' '}
                         {studentChoice != null

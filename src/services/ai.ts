@@ -871,7 +871,7 @@ export function renderDiagramSpecToSvgDataUri(spec: string): string | undefined 
       outElements += `<text x="${endX + 6}" y="${y + 4}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="start">${label}</text>`;
     }
 
-    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${xorCurve}${gateBody}${bubble}${inElements}${outElements}</svg>`;
+    const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${xorCurve}${gateBody}${bubble}${inElements}${outElements}</svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   }
 
@@ -912,7 +912,7 @@ export function renderDiagramSpecToSvgDataUri(spec: string): string | undefined 
     const box = `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="6" stroke="#38bdf8" stroke-width="2.5" fill="#090d16" />`;
     const qMark = `<text x="${boxX + boxW / 2}" y="${boxY + boxH / 2 + 8}" fill="#38bdf8" opacity="0.6" font-family="system-ui, sans-serif" font-size="24" font-weight="bold" text-anchor="middle">?</text>`;
 
-    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${box}${notch}${qMark}${inElements}${outElements}</svg>`;
+    const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${box}${notch}${qMark}${inElements}${outElements}</svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   }
 
@@ -960,7 +960,7 @@ export function renderDiagramSpecToSvgDataUri(spec: string): string | undefined 
 
     const bg = '<rect x="14" y="8" width="92" height="144" rx="8" fill="#090d16" stroke="#334155" stroke-width="1.5" />';
     const segElements = Object.entries(paths).map(([id, p]) => seg(id, p)).join('');
-    const svg = `<svg viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">${bg}${segElements}</svg>`;
+    const svg = `<svg width="120" height="160" viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">${bg}${segElements}</svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   }
 
@@ -1002,7 +1002,94 @@ export function renderDiagramSpecToSvgDataUri(spec: string): string | undefined 
       elements += `<text x="${x + boxSize / 2}" y="${startY + boxSize / 2 + 6}" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" text-anchor="middle">${values[i]}</text>`;
     }
 
-    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${elements}</svg>`;
+    const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${elements}</svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  // 5. 2-Stage Circuit: circuit:G1,G2(A,B,C->Z)
+  const circuitMatch = s.match(/^circuit:\s*([a-z0-9]+)\s*,\s*([a-z0-9]+)\s*\(\s*([^->]*?)\s*(?:->\s*([^)]*?))?\s*\)$/i);
+  if (circuitMatch) {
+    const g1Type = circuitMatch[1].toUpperCase();
+    const g2Type = circuitMatch[2].toUpperCase();
+    const inStr = circuitMatch[3] || 'A,B,C';
+    const outStr = circuitMatch[4] || 'Z';
+    const inputs = inStr.split(',').map(x => x.trim()).filter(Boolean);
+    const inA = inputs[0] || 'A';
+    const inB = inputs[1] || 'B';
+    const inC = inputs[2] || 'C';
+    const outZ = outStr.trim() || 'Z';
+
+    const w = 340;
+    const h = 130;
+
+    const renderGateSnippet = (type: string, x: number, y: number) => {
+      let body = '';
+      let bubble = '';
+      let xorCurve = '';
+      let inX = x;
+      let outX = x + 50;
+
+      switch (type) {
+        case 'AND':
+          body = `<path d="M ${x} ${y} L ${x + 25} ${y} A 25 25 0 0 1 ${x + 25} ${y + 50} L ${x} ${y + 50} Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />`;
+          outX = x + 50;
+          inX = x;
+          break;
+        case 'NAND':
+          body = `<path d="M ${x} ${y} L ${x + 25} ${y} A 25 25 0 0 1 ${x + 25} ${y + 50} L ${x} ${y + 50} Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />`;
+          bubble = `<circle cx="${x + 55}" cy="${y + 25}" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />`;
+          outX = x + 60;
+          inX = x;
+          break;
+        case 'OR':
+          body = `<path d="M ${x - 5} ${y} Q ${x + 15} ${y + 25} ${x - 5} ${y + 50} Q ${x + 35} ${y + 48} ${x + 58} ${y + 25} Q ${x + 35} ${y + 2} ${x - 5} ${y} Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />`;
+          outX = x + 58;
+          inX = x + 4;
+          break;
+        case 'NOR':
+          body = `<path d="M ${x - 5} ${y} Q ${x + 15} ${y + 25} ${x - 5} ${y + 50} Q ${x + 35} ${y + 48} ${x + 58} ${y + 25} Q ${x + 35} ${y + 2} ${x - 5} ${y} Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />`;
+          bubble = `<circle cx="${x + 63}" cy="${y + 25}" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />`;
+          outX = x + 68;
+          inX = x + 4;
+          break;
+        case 'XOR':
+          xorCurve = `<path d="M ${x - 10} ${y} Q ${x + 10} ${y + 25} ${x - 10} ${y + 50}" stroke="#38bdf8" stroke-width="2.5" fill="none" />`;
+          body = `<path d="M ${x - 2} ${y} Q ${x + 18} ${y + 25} ${x - 2} ${y + 50} Q ${x + 38} ${y + 48} ${x + 63} ${y + 25} Q ${x + 38} ${y + 2} ${x - 2} ${y} Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />`;
+          outX = x + 63;
+          inX = x - 8;
+          break;
+        case 'XNOR':
+          xorCurve = `<path d="M ${x - 10} ${y} Q ${x + 10} ${y + 25} ${x - 10} ${y + 50}" stroke="#38bdf8" stroke-width="2.5" fill="none" />`;
+          body = `<path d="M ${x - 2} ${y} Q ${x + 18} ${y + 25} ${x - 2} ${y + 50} Q ${x + 38} ${y + 48} ${x + 63} ${y + 25} Q ${x + 38} ${y + 2} ${x - 2} ${y} Z" stroke="#38bdf8" stroke-width="2.5" fill="none" stroke-linejoin="round" />`;
+          bubble = `<circle cx="${x + 68}" cy="${y + 25}" r="5" stroke="#38bdf8" stroke-width="2" fill="none" />`;
+          outX = x + 73;
+          inX = x - 8;
+          break;
+        default:
+          body = `<rect x="${x}" y="${y}" width="50" height="50" stroke="#38bdf8" stroke-width="2" fill="none" />`;
+          outX = x + 50;
+          inX = x;
+          break;
+      }
+      return { svgSnippet: `${xorCurve}${body}${bubble}`, inX, outX };
+    };
+
+    const g1 = renderGateSnippet(g1Type, 75, 20);
+    const g2 = renderGateSnippet(g2Type, 195, 50);
+
+    const wires = `
+      <line x1="20" y1="33" x2="${g1.inX}" y2="33" stroke="#38bdf8" stroke-width="2" />
+      <text x="14" y="37" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="end">${inA}</text>
+      <line x1="20" y1="57" x2="${g1.inX}" y2="57" stroke="#38bdf8" stroke-width="2" />
+      <text x="14" y="61" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="end">${inB}</text>
+      <polyline points="${g1.outX},45 165,45 165,62 ${g2.inX},62" stroke="#38bdf8" stroke-width="2" fill="none" />
+      <polyline points="20,95 165,95 165,88 ${g2.inX},88" stroke="#38bdf8" stroke-width="2" fill="none" />
+      <text x="14" y="99" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="end">${inC}</text>
+      <line x1="${g2.outX}" y1="75" x2="305" y2="75" stroke="#38bdf8" stroke-width="2" />
+      <text x="312" y="79" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" text-anchor="start">${outZ}</text>
+    `;
+
+    const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${g1.svgSnippet}${g2.svgSnippet}${wires}</svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   }
 
@@ -1019,7 +1106,7 @@ export function stripAnswerLeak(text: string): string {
 export function inferDiagramFromQuestion(q: {
   text: string;
   options?: string[];
-  answer?: number;
+  answer?: number | null;
   stimulus?: string;
   figure?: string;
 }): { stimulus?: string; figure?: string } {
@@ -1086,6 +1173,108 @@ export function inferDiagramFromQuestion(q: {
       figure = renderDiagramSpecToSvgDataUri("block:(J,CLK,K->Q,Q')");
     } else if (dev.includes('t flip-flop') || dev.includes('t-ff')) {
       figure = renderDiagramSpecToSvgDataUri("block:(T,CLK->Q,Q')");
+    }
+  }
+
+  // 5. 2-Stage Boolean Circuits (Q22–Q26: /boolean expression.*circuit|circuit represent/i)
+  if (/boolean\s+expression.*circuit|circuit\s+represent/i.test(q.text) && !figure) {
+    if (/^\(?A\s*[·.*]\s*B\)?\s*\+\s*C$/i.test(optClean)) {
+      figure = renderDiagramSpecToSvgDataUri('circuit:AND,OR(A,B,C->Z)');
+    } else if (/^\(A\s*\+\s*B\)\s*[·.*]\s*C$/i.test(optClean)) {
+      figure = renderDiagramSpecToSvgDataUri('circuit:OR,AND(A,B,C->Z)');
+    } else if (/^\(A\s*[⊕^]\s*B\)\s*[·.*]\s*C$/i.test(optClean)) {
+      figure = renderDiagramSpecToSvgDataUri('circuit:XOR,AND(A,B,C->Z)');
+    } else if (/^\(A\s*\+\s*B\)\s*[⊕^]\s*C$/i.test(optClean)) {
+      figure = renderDiagramSpecToSvgDataUri('circuit:OR,XOR(A,B,C->Z)');
+    } else if (/^\(A\s*[·.*]\s*B\)\s*['’′]\s*[·.*]?\s*C$/i.test(optClean)) {
+      figure = renderDiagramSpecToSvgDataUri('circuit:NAND,AND(A,B,C->Z)');
+    } else {
+      figure = renderDiagramSpecToSvgDataUri('circuit:AND,OR(A,B,C->Z)');
+    }
+  }
+
+  // 6. Binary Place-Value Boxes (Q18–Q21: /decimal value of the binary number shown/i)
+  if (/decimal\s+value\s+of\s+the\s+binary\s+number\s+shown/i.test(q.text) && !figure) {
+    const val = parseInt(optClean, 10);
+    if (!isNaN(val)) {
+      const binRaw = val.toString(2);
+      if (val > 15 || binRaw.length >= 5) {
+        const bin = binRaw.padStart(5, '0');
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${bin}(16,8,4,2,1)`);
+      } else {
+        const bin = binRaw.padStart(4, '0');
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${bin}(8,4,2,1)`);
+      }
+    }
+  }
+
+  // 7. Number Conversion Boxes (Q44–Q50)
+  if (!figure) {
+    if (/grouped\s+binary\s+number\s+to\s+hexadecimal/i.test(q.text)) {
+      const hexChars = optClean.replace(/[^0-9a-fA-F]/g, '').split('');
+      if (hexChars.length > 0) {
+        const groups = hexChars.map(c => parseInt(c, 16).toString(2).padStart(4, '0'));
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${groups.join('|')}`);
+      }
+    } else if (/grouped\s+binary\s+number\s+to\s+octal/i.test(q.text)) {
+      const octChars = optClean.replace(/[^0-7]/g, '').split('');
+      if (octChars.length > 0) {
+        const groups = octChars.map(c => parseInt(c, 8).toString(2).padStart(3, '0'));
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${groups.join('|')}`);
+      }
+    } else if (/binary\s+number\s+to\s+hexadecimal/i.test(q.text)) {
+      const hexChars = optClean.replace(/[^0-9a-fA-F]/g, '');
+      if (hexChars.length > 0) {
+        const bin = parseInt(hexChars, 16).toString(2).padStart(4 * hexChars.length, '0');
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${bin}`);
+      }
+    } else if (/BCD\s+code\s+of\s+the\s+decimal\s+number\s+shown/i.test(q.text)) {
+      const cleanBits = optClean.replace(/[^01]/g, '');
+      if (cleanBits.length >= 4 && cleanBits.length % 4 === 0) {
+        const decDigits: string[] = [];
+        for (let i = 0; i < cleanBits.length; i += 4) {
+          decDigits.push(parseInt(cleanBits.slice(i, i + 4), 2).toString(10));
+        }
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${decDigits.join('|')}`);
+      } else {
+        const decDigits = optClean.replace(/\D/g, '').split('');
+        if (decDigits.length > 0) {
+          figure = renderDiagramSpecToSvgDataUri(`boxes:${decDigits.join('|')}`);
+        }
+      }
+    } else if (/hexadecimal\s+number\s+to\s+binary/i.test(q.text)) {
+      const cleanBits = optClean.replace(/[^01]/g, '');
+      if (cleanBits.length >= 4 && cleanBits.length % 4 === 0) {
+        const hexDigits: string[] = [];
+        for (let i = 0; i < cleanBits.length; i += 4) {
+          hexDigits.push(parseInt(cleanBits.slice(i, i + 4), 2).toString(16).toUpperCase());
+        }
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${hexDigits.join('|')}`);
+      } else {
+        const hexChars = optClean.replace(/[^0-9a-fA-F]/g, '').toUpperCase().split('');
+        if (hexChars.length > 0) {
+          figure = renderDiagramSpecToSvgDataUri(`boxes:${hexChars.join('|')}`);
+        }
+      }
+    } else if (/octal\s+number\s+to\s+binary/i.test(q.text)) {
+      const cleanBits = optClean.replace(/[^01]/g, '');
+      if (cleanBits.length >= 3 && cleanBits.length % 3 === 0) {
+        const octDigits: string[] = [];
+        for (let i = 0; i < cleanBits.length; i += 3) {
+          octDigits.push(parseInt(cleanBits.slice(i, i + 3), 2).toString(8));
+        }
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${octDigits.join('|')}`);
+      } else {
+        const octDigits = optClean.replace(/[^0-7]/g, '').split('');
+        if (octDigits.length > 0) {
+          figure = renderDiagramSpecToSvgDataUri(`boxes:${octDigits.join('|')}`);
+        }
+      }
+    } else if (/1's\s+complement\s+of\s+the\s+binary\s+number\s+shown/i.test(q.text)) {
+      const inverted = optClean.replace(/[01]/g, b => (b === '0' ? '1' : '0'));
+      if (inverted) {
+        figure = renderDiagramSpecToSvgDataUri(`boxes:${inverted}`);
+      }
     }
   }
 
