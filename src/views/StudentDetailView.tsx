@@ -11,6 +11,8 @@ import { generateWhatsAppMessage } from '../utils/whatsapp';
 import { fetchSharedParentPortal } from '../services/firebase';
 import { Student, Lesson, Contract, Payment, ExamScore } from '../types';
 
+const sanitizeRemarks = (remarks?: string) => (remarks || '').replace(/\s*\(attempt:[^)]+\)/g, '').trim();
+
 interface StudentDetailViewProps {
   studentId: string;
   onNavigate: (route: string, param?: string) => void;
@@ -154,6 +156,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 <tbody>
                   {sharedPortal.examScores.map((s: any, idx: number) => {
                     const percent = s.totalMarks > 0 ? Math.round((s.obtainedMarks / s.totalMarks) * 100) : 0;
+                    const cleanRem = sanitizeRemarks(s.remarks);
                     return (
                       <tr key={s.id || idx}>
                         <td>{fmtDate(s.date)}</td>
@@ -167,7 +170,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                             {percent}%
                           </span>
                         </td>
-                        <td>{s.remarks ? <span className="small">{s.remarks}</span> : <span className="muted">-</span>}</td>
+                        <td>{cleanRem ? <span className="small">{cleanRem}</span> : <span className="muted">-</span>}</td>
                       </tr>
                     );
                   })}
@@ -287,12 +290,34 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
   const handleSaveScore = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scoreForm.title || !scoreForm.subject || !scoreForm.date || scoreForm.obtainedMarks === undefined || !scoreForm.totalMarks) {
+    if (
+      !scoreForm.title ||
+      !scoreForm.subject ||
+      !scoreForm.date ||
+      scoreForm.obtainedMarks === undefined ||
+      scoreForm.obtainedMarks === ('' as any) ||
+      isNaN(Number(scoreForm.obtainedMarks)) ||
+      !scoreForm.totalMarks ||
+      isNaN(Number(scoreForm.totalMarks)) ||
+      Number(scoreForm.totalMarks) <= 0
+    ) {
       toast('Please fill all required fields', 'error');
       return;
     }
 
-    addExamScore(student.id, scoreForm as ExamScore);
+    addExamScore(student.id, {
+      ...scoreForm,
+      obtainedMarks: Number(scoreForm.obtainedMarks),
+      totalMarks: Number(scoreForm.totalMarks),
+    } as ExamScore);
+    setScoreForm({
+      title: '',
+      subject: '',
+      date: todayISO(),
+      obtainedMarks: 0,
+      totalMarks: 100,
+      remarks: ''
+    });
     setScoreFormOpen(false);
     toast('Exam score logged successfully', 'success');
   };
@@ -726,11 +751,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 </div>
                 <div className="field" style={{ flex: 1, minWidth: '80px' }}>
                   <label>Obtained *</label>
-                  <input type="number" min="0" step="0.1" value={scoreForm.obtainedMarks} onChange={e => setScoreForm({ ...scoreForm, obtainedMarks: parseFloat(e.target.value) })} required style={{ width: '100%' }} />
+                  <input type="number" min="0" step="0.1" value={scoreForm.obtainedMarks} onChange={e => setScoreForm({ ...scoreForm, obtainedMarks: e.target.value === '' ? ('' as any) : parseFloat(e.target.value) })} required style={{ width: '100%' }} />
                 </div>
                 <div className="field" style={{ flex: 1, minWidth: '80px' }}>
                   <label>Total *</label>
-                  <input type="number" min="1" step="0.1" value={scoreForm.totalMarks} onChange={e => setScoreForm({ ...scoreForm, totalMarks: parseFloat(e.target.value) })} required style={{ width: '100%' }} />
+                  <input type="number" min="1" step="0.1" value={scoreForm.totalMarks} onChange={e => setScoreForm({ ...scoreForm, totalMarks: e.target.value === '' ? ('' as any) : parseFloat(e.target.value) })} required style={{ width: '100%' }} />
                 </div>
               </div>
               <div className="field" style={{ marginBottom: '16px' }}>
@@ -797,11 +822,12 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 const got = Math.max(0, Number(s.obtainedMarks) || 0);
                 const rawPercent = Math.round((got / total) * 100);
                 const percent = Math.max(0, Math.min(100, isNaN(rawPercent) ? 0 : rawPercent));
+                const cleanRem = sanitizeRemarks(s.remarks);
                 return (
                   <div key={s.id} className="row" style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                     <div className="grow" style={{ flex: 1 }}>
                       <div className="title" style={{ fontWeight: 'bold' }}>{s.title} <span className="badge" style={{ marginLeft: '8px' }}>{s.subject}</span></div>
-                      <div className="meta" style={{ fontSize: '12px', color: 'var(--muted)' }}>{fmtDate(s.date)} {s.remarks && `• ${s.remarks}`}</div>
+                      <div className="meta" style={{ fontSize: '12px', color: 'var(--muted)' }}>{fmtDate(s.date)} {cleanRem && `• ${cleanRem}`}</div>
                     </div>
                     <div style={{ textAlign: 'right', paddingRight: '12px' }}>
                       <div className="title" style={{ fontWeight: 'bold', color: percent >= 80 ? 'var(--green)' : percent >= 60 ? 'var(--yellow)' : 'var(--red)' }}>

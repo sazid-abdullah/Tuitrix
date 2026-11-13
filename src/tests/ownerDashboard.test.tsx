@@ -4,7 +4,7 @@
 import { expect, describe, it, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { PricingConfig, TrxUpgradeRequest } from '../types';
 
 let mockCurrentUser: { email: string | null } | null = { email: 'abdullahsazid109@gmail.com' };
@@ -146,6 +146,54 @@ describe('fetchPlatformTelemetry - Promo Telemetry & Approved Revenue', () => {
     expect(promoStats.revenueGeneratedBdt).toBe(80);
     expect(promoStats.totalDiscountBdt).toBe(20);
   });
+
+  it('backfills tutors from allRequests who are not in registeredTutors and sorts by updatedAt descending', async () => {
+    const olderReq: TrxUpgradeRequest = {
+      id: 'req_older',
+      uid: 'uid_older',
+      userEmail: 'older@tutor.com',
+      userName: 'Older Tutor',
+      method: 'bkash',
+      senderPhone: '01711111111',
+      trxId: 'TRX_OLD',
+      amount: 99,
+      finalAmountBdt: 99,
+      status: 'approved',
+      createdAt: '2026-11-10T10:00:00Z',
+    };
+    const newerReq: TrxUpgradeRequest = {
+      id: 'req_newer',
+      uid: 'uid_newer',
+      userEmail: 'newer@tutor.com',
+      userName: 'Newer Tutor',
+      method: 'nagad',
+      senderPhone: '01722222222',
+      trxId: 'TRX_NEW',
+      amount: 99,
+      finalAmountBdt: 99,
+      status: 'pending',
+      createdAt: '2026-11-13T10:00:00Z',
+    };
+
+    localStorage.setItem('upgrade_req_older', JSON.stringify(olderReq));
+    localStorage.setItem('upgrade_req_newer', JSON.stringify(newerReq));
+
+    const telemetry = await fetchPlatformTelemetry();
+
+    expect(telemetry.registeredTutors.length).toBe(2);
+    // Should be sorted descending by updatedAt (newer first)
+    expect(telemetry.registeredTutors[0].uid).toBe('uid_newer');
+    expect(telemetry.registeredTutors[0].tutorName).toBe('Newer Tutor');
+    expect(telemetry.registeredTutors[0].email).toBe('newer@tutor.com');
+    expect(telemetry.registeredTutors[0].plan).toBe('free');
+    expect(telemetry.registeredTutors[0].studentCount).toBe(0);
+
+    expect(telemetry.registeredTutors[1].uid).toBe('uid_older');
+    expect(telemetry.registeredTutors[1].tutorName).toBe('Older Tutor');
+    expect(telemetry.registeredTutors[1].email).toBe('older@tutor.com');
+    expect(telemetry.registeredTutors[1].plan).toBe('pro');
+    expect(telemetry.registeredTutors[1].studentCount).toBe(0);
+  });
 });
 
 describe('OwnerDashboardView - Pricing & Free Student Limit', () => {
@@ -233,6 +281,74 @@ describe('OwnerDashboardView - Pricing & Free Student Limit', () => {
     });
 
     expect(screen.getByText('Access Denied')).toBeInTheDocument();
+  });
+
+  it('renders the Registered Tutors Directory table with tutor name, email, plan badge, and student count', async () => {
+    const approvedTutorReq: TrxUpgradeRequest = {
+      id: 'req_appr',
+      uid: 'tutor_pro_1',
+      userEmail: 'pro_mentor@tuitrix.com',
+      userName: 'Senior Mentor',
+      method: 'bkash',
+      senderPhone: '01711111111',
+      trxId: 'TRX_PRO_1',
+      amount: 99,
+      finalAmountBdt: 99,
+      status: 'approved',
+      createdAt: '2026-11-12T10:00:00Z',
+    };
+    const pendingTutorReq: TrxUpgradeRequest = {
+      id: 'req_pend',
+      uid: 'tutor_free_1',
+      userEmail: 'free_starter@tuitrix.com',
+      userName: 'Novice Instructor',
+      method: 'nagad',
+      senderPhone: '01722222222',
+      trxId: 'TRX_FREE_1',
+      amount: 99,
+      finalAmountBdt: 99,
+      status: 'pending',
+      createdAt: '2026-11-13T10:00:00Z',
+    };
+
+    localStorage.setItem('upgrade_req_tutor_pro_1', JSON.stringify(approvedTutorReq));
+    localStorage.setItem('upgrade_req_tutor_free_1', JSON.stringify(pendingTutorReq));
+
+    const onNavigate = vi.fn();
+    render(<OwnerDashboardView onNavigate={onNavigate} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👑 Owner Dashboard')).toBeInTheDocument();
+    });
+
+    // Check directory table heading and total badge
+    expect(screen.getByText(/Registered Tutors Directory/i)).toBeInTheDocument();
+    expect(screen.getByText('Total: 2')).toBeInTheDocument();
+
+    const directoryCard = screen.getByText(/Registered Tutors Directory/i).closest('.card') as HTMLElement;
+    expect(directoryCard).toBeInTheDocument();
+
+    // Check tutor names within directory card
+    expect(within(directoryCard).getByText('Senior Mentor')).toBeInTheDocument();
+    expect(within(directoryCard).getByText('Novice Instructor')).toBeInTheDocument();
+
+    // Check emails within directory card
+    expect(within(directoryCard).getByText('pro_mentor@tuitrix.com')).toBeInTheDocument();
+    expect(within(directoryCard).getByText('free_starter@tuitrix.com')).toBeInTheDocument();
+
+    // Check plan badges
+    const proBadge = within(directoryCard).getByText('pro');
+    expect(proBadge).toBeInTheDocument();
+    expect(proBadge).toHaveClass('badge', 'green');
+
+    const freeBadge = within(directoryCard).getByText('free');
+    expect(freeBadge).toBeInTheDocument();
+    expect(freeBadge).toHaveClass('badge');
+    expect(freeBadge).not.toHaveClass('green');
+
+    // Check student counts within directory card
+    const zeroCounts = within(directoryCard).getAllByText('0');
+    expect(zeroCounts.length).toBe(2);
   });
 });
 

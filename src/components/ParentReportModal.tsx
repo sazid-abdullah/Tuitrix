@@ -61,7 +61,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
         paidTotal,
         totalDue,
         currency: state.settings.currency || '৳',
-        examScores: (student.examScores || []).slice(0, 5),
+        examScores: [...(student.examScores || [])].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5).map(s => ({ ...s, remarks: s.remarks ? s.remarks.replace(/\s*\(attempt:[^)]+\)/g, '').trim() : '' })),
         lessons: lessons.slice(0, 15).map(l => ({
           id: l.id,
           date: l.date,
@@ -183,6 +183,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
                 <tbody>
                   {[...student.examScores].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map(s => {
                     const percent = s.totalMarks > 0 ? Math.round((s.obtainedMarks / s.totalMarks) * 100) : 0;
+                    const cleanRemarks = s.remarks ? s.remarks.replace(/\s*\(attempt:[^)]+\)/g, '').trim() : '';
                     return (
                       <tr key={s.id}>
                         <td>{fmtDate(s.date, { day: 'numeric', month: 'short', year: 'numeric' })}</td>
@@ -196,7 +197,7 @@ export const ParentReportModal: React.FC<ParentReportModalProps> = ({ isOpen, on
                             {percent}%
                           </span>
                         </td>
-                        <td>{s.remarks ? <span className="small">{s.remarks}</span> : <span className="muted">-</span>}</td>
+                        <td>{cleanRemarks ? <span className="small">{cleanRemarks}</span> : <span className="muted">-</span>}</td>
                       </tr>
                     );
                   })}

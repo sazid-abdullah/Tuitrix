@@ -379,6 +379,25 @@ export const fetchPlatformTelemetry = async (pricingConfig?: PricingConfig): Pro
     } catch {}
   }
 
+  // Backfill any tutor from allRequests whose req.uid is not yet in registeredTutors
+  const existingTutorUids = new Set(registeredTutors.map(t => t.uid));
+  allRequests.forEach(req => {
+    if (req.uid && !existingTutorUids.has(req.uid)) {
+      existingTutorUids.add(req.uid);
+      registeredTutors.push({
+        uid: req.uid,
+        email: req.userEmail || 'Tutor',
+        tutorName: req.userName || 'Tutor',
+        plan: proUserIds.has(req.uid) ? 'pro' : 'free',
+        studentCount: 0,
+        updatedAt: req.createdAt ? new Date(req.createdAt).getTime() || Date.now() : Date.now(),
+      });
+    }
+  });
+
+  // Sort registeredTutors descending by updatedAt
+  registeredTutors.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
   const totalUsers = Math.max(uniqueUsers.size, registeredTutors.length, 1);
   const proUsers = proUserIds.size;
   const freeUsers = Math.max(0, totalUsers - proUsers);
@@ -614,6 +633,8 @@ export const deleteTutorAccountAndData = async (uid: string): Promise<void> => {
     `tutors/${uid}/data/appState`,
     `tutors/${uid}`,
     `users/${uid}/data/appState`,
+    `users/${uid}/data/billing`,
+    `users/${uid}`,
   ];
 
   for (const path of paths) {

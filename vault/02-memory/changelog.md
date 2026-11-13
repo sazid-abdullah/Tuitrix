@@ -6,6 +6,28 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
+## [2026-11-13] — Deep Undefined Firestore Sanitization & Root Tutor Metadata Indexing
+- Applied `stripUndefinedDeep` sanitization across all Firestore `setDoc` payloads in `src/store/context.tsx` (owner billing sync, owner role sync, initial state migration/upload, and 250ms debounced sync) to prevent Firestore SDK `Unsupported field value: undefined` write errors.
+- Added automatic lightweight root tutor metadata indexing to `doc(db, 'users', user.uid)` whenever `users/{uid}/data/appState` is saved, persisting `{ email, tutorName, studentCount, updatedAt }` with merge option to enable `getDocs(collection(db, 'users'))` in `fetchPlatformTelemetry` to reliably discover all registered tutors.
+- Added comprehensive unit tests in `src/tests/authSync.test.tsx` verifying recursive undefined property stripping and root tutor metadata indexing during debounced state synchronization and initial state migration.
+- Added Registered Tutors Directory table to `OwnerDashboardView.tsx` under Overview Tab, rendering tutor name, email, plan status (`badge green` for Pro, `badge` for Free), student count, and safe formatted last active date.
+- Enhanced `fetchPlatformTelemetry` in `src/services/firebase.ts` to backfill registered tutors from `allRequests` for any unindexed users and sort all tutors descending by `updatedAt`.
+- Updated `deleteTutorAccountAndData` in `src/services/firebase.ts` to purge `users/${uid}/data/billing` and the root `users/${uid}` metadata document upon account deletion.
+- Added comprehensive unit tests in `src/tests/ownerDashboard.test.tsx` verifying Registered Tutors Directory rendering, backfill logic, and descending timestamp sorting.
+- Added `[attempt?.id]` hydration `useEffect` in `ExamView.tsx` syncing `answers`, `flags`, and `timeLeft` when the loaded attempt hydrates or switches ID.
+- Added `latestRef = useRef({ answers, flags, attempt })` in `ExamView.tsx` updated on every render to guarantee auto-submit timer triggers always save latest state without closure staleness.
+- Updated `ExamView.tsx` MCQ option rendering to format inline code/math/markdown with `renderMarkdown(opt)`, and cleaned up CQ part mark formatting (`<b>({part.label})</b> <span ... /> <span className="muted small">[{part.marks} marks]</span>`) removing raw asterisks.
+- Added public deep-link landing bypass in `App.tsx` calling `setShowLanding(false)` inside `parseHash()` when navigating to `#/result/...`, `#/student/...`, or `#/help`.
+- Expanded unit test coverage in `src/tests/examAndResultSync.test.tsx` verifying CQ part mark clean rendering without raw asterisks and attempt answer re-syncing on ID change/hydration.
+- Updated `ResultView.tsx` `handleShareResult` to publish `liveAttempt` containing latest `marksState` and `activeStudentId` to ensure shared links include recently evaluated marks and assigned students.
+- Cleaned up `ResultView.tsx` header actions to only display `← Back to AI Assistant` when `!isReadOnly`, preventing parents and students accessing shared public links (`#/result/{id}`) from being routed into the tutor AI Assistant.
+- Enhanced `ResultView.tsx` question review rendering to display `q.figure` on CQ and written questions, cleanly format CQ part marks (`[{p.marks} marks]`) without raw asterisks, format CQ and written model answers with `renderMarkdown`, and format MCQ stems with `renderMarkdown`.
+- Added comprehensive unit tests in `src/tests/examAndResultSync.test.tsx` verifying CQ/written figure rendering, clean CQ part mark badges, hiding of `← Back to AI Assistant` in read-only mode, and `marksState` publishing during result sharing.
+- Updated `ParentReportModal.tsx` `handleCopyPortalLink` to sort `student.examScores` descending by date before publishing the top 5 scores, and stripped raw `(attempt:...)` identifiers from `remarks` for both published snapshots and the modal's Recent Exam Performance table.
+- Enhanced `StudentDetailView.tsx` to strip `(attempt:...)` identifiers when displaying exam score remarks in both the Live Parent Portal view and the tutor's Exam Scores list, while keeping internal `(attempt:<id>)` tokens intact in state for attempt tracking and score resetting.
+- Improved `StudentDetailView.tsx` score logging form to cleanly handle empty string inputs without `NaN` on `obtainedMarks` and `totalMarks`, strictly validate positive numbers on submit, convert inputs safely to `Number(...)`, and reset form state to defaults upon save.
+- Added comprehensive unit tests in `src/tests/examAndResultSync.test.tsx` verifying descending date sorting of published exam scores, removal of raw `(attempt:...)` tokens in parent portal snapshots and student detail views, and empty string input handling on score logging.
+
 ## [2026-11-06] — Invalidation of Dummy Exam Caches & Removal of Mock Question Fallbacks
 - Added `isDummyExam` helper in `src/services/ai.ts` and `src/App.tsx` (`onStartExam`) to detect and invalidate empty or single-placeholder dummy exams (`Sample MCQ question text`, `Question text`), forcing automatic re-parsing from source.
 - Added raw binary PDF guard in `onStartExam` (`src/App.tsx`) to detect `%PDF-` streams and display an actionable toast directing users to "Upload question paper" for AI Vision processing.

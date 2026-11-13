@@ -146,7 +146,7 @@ export const App: React.FC = () => {
   // Route state parsed from location.hash
   const [route, setRoute] = useState<string>('home');
   const [routeParam, setRouteParam] = useState<string>('');
-
+  const [showLanding, setShowLanding] = useState<boolean>(false);
 
   const parseHash = () => {
     const h = window.location.hash.replace(/^#\/?/, '') || 'home';
@@ -158,6 +158,9 @@ export const App: React.FC = () => {
     const param = parts[1] || (queryString ? `?${queryString}` : '');
     if (matchedRoute === 'home' && r !== 'home') {
        window.location.hash = '#/home';
+    }
+    if (['result', 'student', 'help'].includes(matchedRoute)) {
+      setShowLanding(false);
     }
     setRoute(matchedRoute);
     setRouteParam(param);
@@ -243,8 +246,6 @@ export const App: React.FC = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  const [showLanding, setShowLanding] = useState<boolean>(false);
   const [legalTab, setLegalTab] = useState<'privacy' | 'terms' | 'billing' | 'security' | null>(null);
 
   useEffect(() => {

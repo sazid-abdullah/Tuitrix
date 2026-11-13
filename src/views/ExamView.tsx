@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/context';
 import { fmtClock, bnNum, fmtN } from '../utils/date';
 import { renderMarkdown, inferDiagramFromQuestion } from '../services/ai';
@@ -33,6 +33,16 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
   const [listModalOpen, setListModalOpen] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+
+  const latestRef = useRef({ answers, flags, attempt });
+  latestRef.current = { answers, flags, attempt };
+
+  // Sync state whenever attempt hydrates or changes ID
+  useEffect(() => {
+    setAnswers(attempt?.answers || {});
+    setFlags(attempt?.flags || []);
+    setTimeLeft(attempt ? Math.max(0, attempt.endsAt - Date.now()) : 0);
+  }, [attempt?.id]);
 
   // Set exam mode on document body
   useEffect(() => {
@@ -123,13 +133,17 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
   };
 
   const handleSubmit = (auto: boolean = false) => {
+    const cur = latestRef.current;
+    const curAttempt = cur.attempt || attempt;
+    if (!curAttempt) return;
+
     const submitted = {
-      ...attempt,
+      ...curAttempt,
       status: 'submitted' as const,
       auto,
-      submittedAt: Math.min(Date.now(), attempt.endsAt),
-      answers,
-      flags,
+      submittedAt: Math.min(Date.now(), curAttempt.endsAt),
+      answers: cur.answers,
+      flags: cur.flags,
     };
     saveAttempt(submitted);
     if (auto) {
@@ -137,7 +151,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
     } else {
       toast('Exam submitted successfully', 'success');
     }
-    onNavigate('result', attempt.id);
+    onNavigate('result', curAttempt.id);
   };
 
   // Compute question answering stats
@@ -230,7 +244,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
                           onChange={() => handleSelectMCQ(q.id, optIdx)}
                         />
                         <span className="exam-ol">{L[optIdx]}</span>
-                        <span className="doc">{opt}</span>
+                        <span className="doc" dangerouslySetInnerHTML={{ __html: renderMarkdown(opt) }} />
                       </label>
                     ))}
                   </div>
@@ -243,7 +257,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ attemptId, onNavigate }) => 
                   {q.parts.map((part, pIdx) => (
                     <div key={pIdx} className="exam-part">
                       <div className="doc">
-                        <b>({part.label})</b> {part.text} *[{part.marks} marks]*
+                        <b>({part.label})</b> <span dangerouslySetInnerHTML={{ __html: renderMarkdown(part.text) }} /> <span className="muted small">[{part.marks} marks]</span>
                       </div>
                       <textarea
                         rows={part.marks > 2 ? 5 : 3}

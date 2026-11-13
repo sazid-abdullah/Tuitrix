@@ -7,12 +7,16 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ResultView } from '../views/ResultView';
 import { ExamView, isQuestionAnswered } from '../views/ExamView';
+import { StudentDetailView } from '../views/StudentDetailView';
+import { ParentReportModal } from '../components/ParentReportModal';
 import { StoreProvider, useStore, purgeDummyRecords } from '../store/context';
 import * as context from '../store/context';
 import { Question } from '../types';
 
 const mockPublishShared = vi.fn((attempt, exam, meta) => Promise.resolve(attempt.id));
 const mockFetchShared = vi.fn((resultId) => Promise.resolve<any>(null));
+const mockPublishSharedPortal = vi.fn((portalId: string, snapshot: any) => Promise.resolve(portalId));
+const mockFetchSharedPortal = vi.fn((portalId: string) => Promise.resolve<any>(null));
 
 vi.mock('../services/firebase', () => ({
   app: {},
@@ -31,6 +35,8 @@ vi.mock('../services/firebase', () => ({
   fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 99, freeStudentLimit: 15 })),
   publishSharedExamResult: (attempt: any, exam: any, meta?: any) => mockPublishShared(attempt, exam, meta),
   fetchSharedExamResult: (resultId: string) => mockFetchShared(resultId),
+  publishSharedParentPortal: (portalId: string, snapshot: any) => mockPublishSharedPortal(portalId, snapshot),
+  fetchSharedParentPortal: (portalId: string) => mockFetchSharedPortal(portalId),
 }));
 
 describe('isQuestionAnswered helper', () => {
@@ -145,6 +151,143 @@ describe('ExamView Question Overview CQ Answered Status', () => {
     const q1Btn = screen.getByRole('button', { name: '1' });
     expect(q1Btn).toBeInTheDocument();
     expect(q1Btn.className).not.toContain('done');
+  });
+
+  it('renders CQ part marks without raw asterisks and renders formatted mark badges', () => {
+    const mockExam = {
+      id: 'exam_cq_marks_test',
+      title: 'Chemistry Exam',
+      duration: 30,
+      createdAt: '2026-11-04T10:00:00Z',
+      questions: [
+        {
+          id: 'q_cq_marks',
+          n: 1,
+          type: 'cq' as const,
+          stimulus: 'Chemical Reaction',
+          parts: [
+            { label: 'a', text: 'Define catalyst', marks: 2, answer: 'Rate booster' },
+            { label: 'b', text: 'State Le Chatelier principle', marks: 3, answer: 'Equilibrium shift' },
+          ],
+        },
+        {
+          id: 'q_mcq_opts',
+          n: 2,
+          type: 'mcq' as const,
+          text: 'What is water formula?',
+          options: ['H2O', 'CO2'],
+          answer: 0,
+          marks: 1,
+        },
+      ],
+    };
+
+    const mockAttempt = {
+      id: 'attempt_cq_marks',
+      examId: 'exam_cq_marks_test',
+      title: 'Chemistry Attempt',
+      studentId: 'std_1',
+      status: 'running' as const,
+      startedAt: Date.now(),
+      endsAt: Date.now() + 600000,
+      answers: {},
+      flags: [],
+      scoreLogged: false,
+    };
+
+    vi.spyOn(context, 'useStore').mockReturnValue({
+      state: {
+        exams: [mockExam],
+        attempts: [mockAttempt],
+        students: [],
+      },
+      saveAttempt: vi.fn(),
+      toast: vi.fn(),
+    } as any);
+
+    render(<ExamView attemptId="attempt_cq_marks" onNavigate={mockNavigate} />);
+
+    // Check that part marks are rendered
+    expect(screen.getByText('[2 marks]')).toBeInTheDocument();
+    expect(screen.getByText('[3 marks]')).toBeInTheDocument();
+
+    // Verify raw asterisks are not present in the DOM text
+    const partElements = document.querySelectorAll('.exam-part .doc');
+    expect(partElements.length).toBe(2);
+    expect(partElements[0].textContent).not.toContain('*[');
+    expect(partElements[0].textContent).not.toContain(']*');
+    expect(partElements[1].textContent).not.toContain('*[');
+    expect(partElements[1].textContent).not.toContain(']*');
+  });
+
+  it('syncs existing attempt.answers when switching or hydrating attemptId', () => {
+    const mockExam = {
+      id: 'exam_hydration_test',
+      title: 'Math Exam',
+      duration: 30,
+      createdAt: '2026-11-04T10:00:00Z',
+      questions: [
+        {
+          id: 'q_cq_hydrate',
+          n: 1,
+          type: 'cq' as const,
+          stimulus: 'Geometry',
+          parts: [{ label: 'a', text: 'Calculate hypotenuse', marks: 2, answer: '5' }],
+        },
+      ],
+    };
+
+    const attemptA = {
+      id: 'attempt_A',
+      examId: 'exam_hydration_test',
+      title: 'Math Attempt A',
+      studentId: 'std_A',
+      status: 'running' as const,
+      startedAt: Date.now(),
+      endsAt: Date.now() + 600000,
+      answers: {
+        q_cq_hydrate: { 0: 'Student A Answer' },
+      },
+      flags: [],
+      scoreLogged: false,
+    };
+
+    const attemptB = {
+      id: 'attempt_B',
+      examId: 'exam_hydration_test',
+      title: 'Math Attempt B',
+      studentId: 'std_B',
+      status: 'running' as const,
+      startedAt: Date.now(),
+      endsAt: Date.now() + 600000,
+      answers: {
+        q_cq_hydrate: { 0: 'Student B Answer' },
+      },
+      flags: [],
+      scoreLogged: false,
+    };
+
+    vi.spyOn(context, 'useStore').mockReturnValue({
+      state: {
+        exams: [mockExam],
+        attempts: [attemptA, attemptB],
+        students: [],
+      },
+      saveAttempt: vi.fn(),
+      toast: vi.fn(),
+    } as any);
+
+    const { rerender } = render(<ExamView attemptId="attempt_A" onNavigate={mockNavigate} />);
+
+    // Verify Student A's answer is present
+    const textarea = screen.getByPlaceholderText(/Write your answer here or solve on test paper/i) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Student A Answer');
+
+    // Switch attemptId to attempt_B
+    rerender(<ExamView attemptId="attempt_B" onNavigate={mockNavigate} />);
+
+    // Verify answers synced to Student B's answer
+    expect(textarea.value).toBe('Student B Answer');
   });
 });
 
@@ -511,6 +654,7 @@ describe('StoreContext deleteExamScore resets scoreLogged on attempts', () => {
       expect(screen.queryByText('Delete result')).not.toBeInTheDocument();
       expect(screen.queryByText('🔗 Share Result Link')).not.toBeInTheDocument();
       expect(screen.queryByText('Save marks')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /← Back to AI Assistant/i })).not.toBeInTheDocument();
 
       // Print should remain available
       expect(screen.getByText('🖨️ Print')).toBeInTheDocument();
@@ -664,6 +808,361 @@ describe('StoreContext deleteExamScore resets scoreLogged on attempts', () => {
       fireEvent.click(confirmBtn);
 
       expect(mockNavigate).toHaveBeenCalledWith('ai', 'tool=exam');
+    });
+  });
+
+  describe('ResultView Enhancements and Live Marks Sharing', () => {
+    it('renders q.figure on written and CQ questions and formats CQ part marks without asterisks', () => {
+      const mockNavigate = vi.fn();
+      const mockState: any = {
+        students: [{ id: 'std_cq', name: 'Tanha' }],
+        attempts: [
+          {
+            id: 'att_cq_fig',
+            examId: 'ex_cq_fig',
+            title: 'Physics CQ Exam',
+            studentId: 'std_cq',
+            status: 'submitted',
+            startedAt: Date.now(),
+            answers: {
+              q_cq: { 0: 'Speed is distance over time', 1: 'Velocity has direction' },
+              q_written: 'Energy is conserved',
+            },
+            marks: {},
+            aiMarks: {},
+          },
+        ],
+        exams: [
+          {
+            id: 'ex_cq_fig',
+            title: 'Physics CQ Exam',
+            duration: 30,
+            questions: [
+              {
+                id: 'q_cq',
+                n: '1',
+                type: 'cq',
+                figure: 'data:image/svg+xml;utf8,<svg id="cq-fig"></svg>',
+                stimulus: 'Observe the diagram below',
+                parts: [
+                  { label: 'a', text: 'Define speed', marks: 1, answer: 'Distance / time' },
+                  { label: 'b', text: 'Compare speed and velocity', marks: 2, answer: 'Velocity has vector nature' },
+                ],
+              },
+              {
+                id: 'q_written',
+                n: '2',
+                type: 'written',
+                text: 'State principle of energy conservation',
+                figure: 'data:image/svg+xml;utf8,<svg id="written-fig"></svg>',
+                marks: 3,
+                answer: 'Energy cannot be created or destroyed',
+              },
+            ],
+          },
+        ],
+        settings: { currency: '৳', tutorName: 'Teacher' },
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        studentName: () => 'Tanha',
+        saveAttempt: vi.fn(),
+        deleteAttempt: vi.fn(),
+        saveExam: vi.fn(),
+        addExamScore: vi.fn(),
+        toast: vi.fn(),
+      } as any);
+
+      const { container } = render(<ResultView attemptId="att_cq_fig" onNavigate={mockNavigate} />);
+
+      // Figures rendered for both CQ and written questions
+      const figures = container.querySelectorAll('img.exam-fig');
+      expect(figures.length).toBeGreaterThanOrEqual(2);
+      expect((figures[0] as HTMLImageElement).src).toContain('data:image/svg+xml');
+
+      // CQ Part marks rendered without raw asterisks
+      const partDocs = container.querySelectorAll('.exam-part > .doc');
+      expect(partDocs.length).toBe(2);
+      expect(partDocs[0].textContent).toContain('[1 marks]');
+      expect(partDocs[0].textContent).not.toContain('*');
+      expect(partDocs[1].textContent).toContain('[2 marks]');
+      expect(partDocs[1].textContent).not.toContain('*');
+    });
+
+    it('publishes updated marksState and activeStudentId when handleShareResult is triggered', async () => {
+      const mockNavigate = vi.fn();
+      const mockToast = vi.fn();
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+      });
+
+      const mockState: any = {
+        students: [{ id: 'std_marks', name: 'Zayan' }],
+        attempts: [
+          {
+            id: 'att_share_marks',
+            examId: 'ex_share_marks',
+            title: 'Math Test',
+            studentId: 'std_marks',
+            startedAt: Date.now(),
+            answers: { q1: 'x = 5' },
+            marks: {},
+            aiMarks: {},
+          },
+        ],
+        exams: [
+          {
+            id: 'ex_share_marks',
+            title: 'Math Test',
+            duration: 30,
+            questions: [
+              { id: 'q1', n: '1', type: 'written', text: 'Solve for x', marks: 5, answer: 'x = 5' },
+            ],
+          },
+        ],
+        settings: { tutorName: 'Teacher Sir', currency: '৳' },
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue({
+        state: mockState,
+        studentName: () => 'Zayan',
+        saveAttempt: vi.fn(),
+        deleteAttempt: vi.fn(),
+        saveExam: vi.fn(),
+        addExamScore: vi.fn(),
+        toast: mockToast,
+      } as any);
+
+      render(<ResultView attemptId="att_share_marks" onNavigate={mockNavigate} />);
+
+      // Fill in mark input
+      const markInput = screen.getByRole('spinbutton');
+      fireEvent.change(markInput, { target: { value: '4.5' } });
+
+      // Click share
+      const shareBtn = screen.getByText('🔗 Share Result Link');
+      fireEvent.click(shareBtn);
+
+      await act(async () => {});
+
+      expect(mockPublishShared).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'att_share_marks',
+          studentId: 'std_marks',
+          marks: expect.objectContaining({ q1: 4.5 }),
+        }),
+        expect.objectContaining({ id: 'ex_share_marks' }),
+        expect.objectContaining({ studentFirstName: 'Zayan', tutorName: 'Teacher Sir' })
+      );
+    });
+  });
+
+  describe('ExamScore Remarks Sanitization & Score Form Validation', () => {
+    it('publishes 5 most recent examScores sorted descending by date with (attempt:...) stripped from remarks in ParentReportModal', async () => {
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+      });
+
+      const mockStudentWithScores: any = {
+        id: 'std_scores_sort',
+        name: 'Sadia Jahan',
+        grade: 'Class 10',
+        curriculum: 'English Version',
+        subjects: ['Math'],
+        examScores: [
+          { id: 's1', title: 'Quiz 1', subject: 'Math', date: '2026-01-05', obtainedMarks: 18, totalMarks: 20, remarks: 'Good job (attempt:att_001)' },
+          { id: 's2', title: 'Quiz 2', subject: 'Math', date: '2026-03-10', obtainedMarks: 19, totalMarks: 20, remarks: 'Excellent (attempt:att_002)' },
+          { id: 's3', title: 'Quiz 3', subject: 'Math', date: '2026-02-15', obtainedMarks: 15, totalMarks: 20, remarks: 'Needs revision (attempt:att_003)' },
+          { id: 's4', title: 'Quiz 4', subject: 'Math', date: '2026-04-01', obtainedMarks: 20, totalMarks: 20, remarks: 'Perfect score (attempt:att_004)' },
+          { id: 's5', title: 'Quiz 5', subject: 'Math', date: '2026-05-12', obtainedMarks: 17, totalMarks: 20, remarks: 'Well done (attempt:att_005)' },
+          { id: 's6', title: 'Quiz 6', subject: 'Math', date: '2025-12-01', obtainedMarks: 14, totalMarks: 20, remarks: 'Oldest test (attempt:att_006)' },
+        ],
+      };
+
+      const mockStore: any = {
+        state: {
+          settings: { tutorName: 'Teacher Rafiq', currency: '৳' },
+          contracts: [],
+          lessons: [],
+          payments: [],
+        },
+        money: (n: number) => `৳${n}`,
+        toast: vi.fn(),
+      };
+      vi.spyOn(context, 'useStore').mockReturnValue(mockStore);
+
+      render(<ParentReportModal isOpen={true} onClose={vi.fn()} student={mockStudentWithScores} />);
+
+      const copyPortalBtn = screen.getByText('🔗 Copy Parent Portal Link');
+      fireEvent.click(copyPortalBtn);
+
+      await act(async () => {});
+
+      expect(mockPublishSharedPortal).toHaveBeenCalledWith(
+        'std_scores_sort',
+        expect.objectContaining({
+          examScores: [
+            expect.objectContaining({ id: 's5', date: '2026-05-12', remarks: 'Well done' }),
+            expect.objectContaining({ id: 's4', date: '2026-04-01', remarks: 'Perfect score' }),
+            expect.objectContaining({ id: 's2', date: '2026-03-10', remarks: 'Excellent' }),
+            expect.objectContaining({ id: 's3', date: '2026-02-15', remarks: 'Needs revision' }),
+            expect.objectContaining({ id: 's1', date: '2026-01-05', remarks: 'Good job' }),
+          ],
+        })
+      );
+
+      const publishedScores = mockPublishSharedPortal.mock.calls[0][1].examScores;
+      expect(publishedScores).toHaveLength(5);
+      expect(publishedScores.some((s: any) => s.id === 's6')).toBe(false);
+      publishedScores.forEach((s: any) => {
+        expect(s.remarks).not.toContain('attempt:');
+      });
+    });
+
+    it('hides raw (attempt:...) tags when rendering exam score remarks in StudentDetailView', () => {
+      const mockStudent: any = {
+        id: 'std_detail_remarks',
+        name: 'Abrar Fahim',
+        grade: 'HSC',
+        examScores: [
+          {
+            id: 'score_with_attempt',
+            title: 'Model Test 1',
+            subject: 'Physics',
+            date: '2026-11-10',
+            obtainedMarks: 45,
+            totalMarks: 50,
+            remarks: 'Completed via Interactive Exam (attempt:att_secret_123)',
+          },
+        ],
+      };
+
+      const mockStore: any = {
+        state: {
+          students: [mockStudent],
+          contracts: [],
+          lessons: [],
+          payments: [],
+          docs: [],
+          attempts: [],
+          batches: [],
+          settings: { tutorName: 'Teacher', currency: '৳' },
+        },
+        getStudent: (id: string) => (id === mockStudent.id ? mockStudent : null),
+        money: (n: number) => `৳${n}`,
+        deleteStudent: vi.fn(),
+        deleteContract: vi.fn(),
+        saveContract: vi.fn(),
+        saveStudent: vi.fn(),
+        toast: vi.fn(),
+        addExamScore: vi.fn(),
+        deleteExamScore: vi.fn(),
+      };
+      vi.spyOn(context, 'useStore').mockReturnValue(mockStore);
+
+      const { container } = render(
+        <StudentDetailView
+          studentId="std_detail_remarks"
+          onNavigate={vi.fn()}
+          onEditStudent={vi.fn()}
+          onAddContract={vi.fn()}
+          onEditContract={vi.fn()}
+          onLogLesson={vi.fn()}
+          onRecordPayment={vi.fn()}
+          onUploadPaper={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText('Model Test 1')).toBeInTheDocument();
+      const scoreRow = container.querySelector('.list .row');
+      expect(scoreRow).toBeInTheDocument();
+      expect(scoreRow?.textContent).toContain('Completed via Interactive Exam');
+      expect(scoreRow?.textContent).not.toContain('attempt:att_secret_123');
+    });
+
+    it('handles empty string cleanly on obtainedMarks and totalMarks without NaN in StudentDetailView', () => {
+      const mockAddExamScore = vi.fn();
+      const mockStudent: any = {
+        id: 'std_score_input',
+        name: 'Labib',
+        examScores: [],
+      };
+
+      const mockStore: any = {
+        state: {
+          students: [mockStudent],
+          contracts: [],
+          lessons: [],
+          payments: [],
+          docs: [],
+          attempts: [],
+          batches: [],
+          settings: { tutorName: 'Teacher', currency: '৳' },
+        },
+        getStudent: (id: string) => mockStudent,
+        money: (n: number) => `৳${n}`,
+        deleteStudent: vi.fn(),
+        deleteContract: vi.fn(),
+        saveContract: vi.fn(),
+        saveStudent: vi.fn(),
+        toast: vi.fn(),
+        addExamScore: mockAddExamScore,
+        deleteExamScore: vi.fn(),
+      };
+      vi.spyOn(context, 'useStore').mockReturnValue(mockStore);
+
+      render(
+        <StudentDetailView
+          studentId="std_score_input"
+          onNavigate={vi.fn()}
+          onEditStudent={vi.fn()}
+          onAddContract={vi.fn()}
+          onEditContract={vi.fn()}
+          onLogLesson={vi.fn()}
+          onRecordPayment={vi.fn()}
+          onUploadPaper={vi.fn()}
+        />
+      );
+
+      // Open score form
+      fireEvent.click(screen.getByRole('button', { name: /Log Exam Score/i }));
+
+      const spinButtons = screen.getAllByRole('spinbutton');
+      const obtainedInput = spinButtons[0] as HTMLInputElement;
+      const totalInput = spinButtons[1] as HTMLInputElement;
+
+      // Clearing inputs should not cause NaN in value
+      fireEvent.change(obtainedInput, { target: { value: '' } });
+      fireEvent.change(totalInput, { target: { value: '' } });
+
+      expect(obtainedInput.value).toBe('');
+      expect(totalInput.value).toBe('');
+
+      // Fill in valid numbers
+      fireEvent.change(screen.getByPlaceholderText(/e\.g\. Chapter 4 Quiz/i), { target: { value: 'Chapter 2 Quiz' } });
+      fireEvent.change(screen.getByPlaceholderText(/e\.g\. Math/i), { target: { value: 'Chemistry' } });
+      fireEvent.change(obtainedInput, { target: { value: '23.5' } });
+      fireEvent.change(totalInput, { target: { value: '25' } });
+
+      // Submit
+      fireEvent.click(screen.getByRole('button', { name: /Save Score/i }));
+
+      expect(mockAddExamScore).toHaveBeenCalledWith(
+        'std_score_input',
+        expect.objectContaining({
+          title: 'Chapter 2 Quiz',
+          subject: 'Chemistry',
+          obtainedMarks: 23.5,
+          totalMarks: 25,
+        })
+      );
     });
   });
 

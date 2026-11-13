@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AppState, BillingState, Student, Batch, Contract, Lesson, Payment, Expense, Goal, SavedDoc, Exam, Attempt, ToastMessage, SyncStatus, ExamScore, SavedAiResource } from '../types';
 import { todayISO, addDays, addMonths, parseISO, uid } from '../utils/date';
 import { isOwnerEmail } from '../utils/auth';
-import { auth, db, onAuthStateChanged } from '../services/firebase';
+import { auth, db, onAuthStateChanged, stripUndefinedDeep } from '../services/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const STORE_KEY = 'tuitrix_data';
@@ -256,7 +256,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (!billingDoc.exists() || data?.plan !== 'pro' || data?.credits < 999999) {
               // Sync owner billing state back to Firestore so it's always Pro
               const newState: BillingState = { plan: 'pro', credits: 999999, proUntil: Date.now() + 100 * 365 * 86400e3, updatedAt: Date.now(), transactions: data?.transactions || [] };
-              if (db) setDoc(doc(db, `users/${user.uid}/data/billing`), newState).catch(console.error);
+              if (db) setDoc(doc(db, `users/${user.uid}/data/billing`), stripUndefinedDeep(newState)).catch(console.error);
             } else {
               setBillingState(data);
             }
@@ -307,7 +307,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             remoteState = purgeDummyRecords(remoteState);
             if (isOwner && (!remoteState.isOwner || !remoteState.isAdmin || remoteState.role !== 'owner')) {
                remoteState = { ...remoteState, isOwner: true, isAdmin: true, role: 'owner' };
-               await setDoc(docRef, remoteState);
+               await setDoc(docRef, stripUndefinedDeep(remoteState));
+               setDoc(doc(db, 'users', user.uid), stripUndefinedDeep({ email: user.email || '', tutorName: remoteState.settings?.tutorName || '', studentCount: Array.isArray(remoteState.students) ? remoteState.students.length : 0, updatedAt: Date.now() }), { merge: true }).catch(() => {});
             }
             isInitialRemoteLoadRef.current = true;
             setState(remoteState);
@@ -334,15 +335,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
             if (needsMigration) {
                isMigratingRef.current = true;
-               await setDoc(docRef, dataToUpload);
+               await setDoc(docRef, stripUndefinedDeep(dataToUpload));
                isMigratingRef.current = false;
                isInitialRemoteLoadRef.current = true;
                setState(dataToUpload);
             } else {
-               await setDoc(docRef, dataToUpload);
+               await setDoc(docRef, stripUndefinedDeep(dataToUpload));
                isInitialRemoteLoadRef.current = true;
                setState(dataToUpload);
             }
+            setDoc(doc(db, 'users', user.uid), stripUndefinedDeep({ email: user.email || '', tutorName: dataToUpload.settings?.tutorName || '', studentCount: Array.isArray(dataToUpload.students) ? dataToUpload.students.length : 0, updatedAt: Date.now() }), { merge: true }).catch(() => {});
             setIsStateLoaded(true);
             setSyncStatus(navigator.onLine ? 'synced' : 'offline');
             setLastSyncedAt(new Date().toISOString());
@@ -452,7 +454,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (db) {
             setSyncStatus('syncing');
             const docRef = doc(db, `users/${user.uid}/data/appState`);
-            setDoc(docRef, state)
+            setDoc(docRef, stripUndefinedDeep(state))
               .then(() => {
                 setSyncStatus('synced');
                 setLastSyncedAt(new Date().toISOString());
@@ -461,6 +463,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 console.error('Failed to save to Firestore', e);
                 setSyncStatus(!navigator.onLine ? 'offline' : 'error');
               });
+            setDoc(doc(db, 'users', user.uid), stripUndefinedDeep({ email: user.email || '', tutorName: state.settings?.tutorName || '', studentCount: Array.isArray(state.students) ? state.students.length : 0, updatedAt: Date.now() }), { merge: true }).catch(() => {});
           }
         } else if (!user) {
           setSyncStatus('local');

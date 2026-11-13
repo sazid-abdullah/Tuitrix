@@ -722,6 +722,71 @@ export const OwnerDashboardView: React.FC<OwnerDashboardViewProps> = ({ onNaviga
               </div>
             )}
           </div>
+
+          {/* Registered Tutors Directory */}
+          <div className="card" style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>👥 Registered Tutors Directory</h3>
+                <p className="muted small" style={{ margin: '4px 0 0 0' }}>
+                  Live index of registered tutors, subscription tier, student counts, and last active sync.
+                </p>
+              </div>
+              <span className="badge" style={{ fontSize: '0.8rem' }}>
+                Total: {telemetry?.registeredTutors?.length || 0}
+              </span>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table" style={{ width: '100%', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr>
+                    <th>Tutor Name</th>
+                    <th>Email</th>
+                    <th>Plan</th>
+                    <th>Students</th>
+                    <th>Last Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(telemetry?.registeredTutors || []).map(t => {
+                    let lastActive = '—';
+                    try {
+                      if (t.updatedAt) {
+                        const d = new Date(t.updatedAt);
+                        if (!isNaN(d.getTime())) {
+                          lastActive = fmtDate(d.toISOString().split('T')[0]) || '—';
+                        }
+                      }
+                    } catch {
+                      lastActive = '—';
+                    }
+
+                    return (
+                      <tr key={t.uid}>
+                        <td style={{ fontWeight: 600 }}>{t.tutorName}</td>
+                        <td>{t.email}</td>
+                        <td>
+                          <span className={t.plan === 'pro' ? 'badge green' : 'badge'}>
+                            {t.plan}
+                          </span>
+                        </td>
+                        <td>{t.studentCount}</td>
+                        <td className="small muted">{lastActive}</td>
+                      </tr>
+                    );
+                  })}
+                  {(!telemetry?.registeredTutors || telemetry.registeredTutors.length === 0) && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }} className="muted">
+                        No registered tutors found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

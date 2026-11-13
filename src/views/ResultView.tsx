@@ -377,7 +377,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
     if (!attempt || !resolvedExam) return;
     setSharing(true);
     try {
-      await publishSharedExamResult(attempt, resolvedExam, {
+      const liveAttempt = { ...attempt, studentId: activeStudentId || null, marks: marksState, aiMarks };
+      await publishSharedExamResult(liveAttempt, resolvedExam, {
         studentFirstName: targetStudent?.name,
         tutorName: state.settings.tutorName,
       });
@@ -416,13 +417,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
           </div>
         </div>
         <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn sm ghost"
-            onClick={() => onNavigate('ai', 'tool=results')}
-          >
-            ← Back to AI Assistant
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              className="btn sm ghost"
+              onClick={() => onNavigate('ai', 'tool=results')}
+            >
+              ← Back to AI Assistant
+            </button>
+          )}
           {!isReadOnly && !attempt.studentId && (
             <select
               value={selectedStudentId}
@@ -525,6 +528,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                   </details>
                 )}
 
+                {q.figure && <img className="exam-fig" src={q.figure} alt="Figure" />}
+
                 {q.type === 'cq' ? (
                   q.parts.map((p, pIdx) => {
                     const ans = String(attempt.answers[q.id]?.[pIdx] || '').trim();
@@ -534,7 +539,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                     return (
                       <div key={pIdx} className="exam-part">
                         <div className="doc">
-                          <b>({p.label})</b> {p.text} *[{p.marks} marks]*
+                          <b>({p.label})</b> <span dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text) }} /> <span className="muted small">[{p.marks} marks]</span>
                         </div>
                         <div className="exam-ans">
                           {ans || <span className="muted">No typed response (written on paper)</span>}
@@ -542,7 +547,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                         {p.answer && (
                           <details style={{ margin: '4px 0' }}>
                             <summary className="small muted">Model answer</summary>
-                            <div className="doc small">{p.answer}</div>
+                            <div className="doc small" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.answer) }} />
                           </details>
                         )}
                         <div className="mark-row">
@@ -591,7 +596,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                     {q.answer && (
                       <details style={{ margin: '4px 0' }}>
                         <summary className="small muted">Model answer</summary>
-                        <div className="doc small">{q.answer}</div>
+                        <div className="doc small" dangerouslySetInnerHTML={{ __html: renderMarkdown(q.answer) }} />
                       </details>
                     )}
                     <div className="mark-row">
@@ -671,7 +676,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ attemptId, onNavigate })
                   <div key={q.id} className="row">
                     <div className="grow">
                       <div className="title">
-                        <b>{q.n}.</b> {q.text}
+                        <b>{q.n}.</b> <span className="doc" dangerouslySetInnerHTML={{ __html: renderMarkdown(q.text) }} />
                       </div>
                       {stim && (
                         <div
