@@ -13,7 +13,12 @@ interface StudentsViewProps {
 }
 
 export function scheduleSummary(s: Student): string {
-  if (!s.schedule || !s.schedule.length) return 'No fixed schedule';
+  if (!s.schedule || !s.schedule.length) {
+    if (s.scheduleDays && s.scheduleDays.length > 0) {
+      return `${s.scheduleDays.join(', ')}${s.scheduleTime ? ' · ' + fmtTime(s.scheduleTime) : ''}`;
+    }
+    return 'No fixed schedule';
+  }
   const sorted = [...s.schedule].sort(
     (a, b) => a.day - b.day || (a.time || '').localeCompare(b.time || '')
   );
@@ -159,7 +164,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                   if (progressPct >= 100) glowColor = 'emerald';
                   else if (progressPct >= 75) glowColor = 'amber';
 
-                  if (progressPct >= 100) {
+                  const isCycleComplete = (st.completed > 0 && st.progress === 0 && bal > 0.005) || progressPct >= 100;
+
+                  if (isCycleComplete) {
                     cycleRender = (
                       <span className="badge emerald" style={{ animation: 'pulse 2s infinite' }}>🎉 Cycle Complete · Payment Due!</span>
                     );
@@ -222,7 +229,22 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                         📖 Last Topic: <i>{topicStr}</i>
                       </div>
                     </div>
-                    {contracts.length ? (cycleRender || balanceBadge(bal)) : <span className="badge">No contract</span>}
+                    {contracts.length ? (
+                      cycleRender ? (
+                        bal > 0.005 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                            {cycleRender}
+                            {balanceBadge(bal)}
+                          </div>
+                        ) : (
+                          cycleRender
+                        )
+                      ) : (
+                        balanceBadge(bal)
+                      )
+                    ) : (
+                      <span className="badge">No contract</span>
+                    )}
                   </a>
 
                   {/* Quick Actions Row */}

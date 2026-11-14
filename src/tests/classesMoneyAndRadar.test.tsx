@@ -8,6 +8,8 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ClassesView } from '../views/ClassesView';
 import { MoneyView } from '../views/MoneyView';
 import { HomeView } from '../views/HomeView';
+import { StudentsView, scheduleSummary } from '../views/StudentsView';
+import { contractStatus, studentBalance } from '../store/contracts';
 import * as context from '../store/context';
 import { todayISO, WEEKDAYS, fmtTime } from '../utils/date';
 
@@ -129,6 +131,69 @@ describe('ClassesView, MoneyView, and HomeView Integration Tests', () => {
       // s1 and s2 (not belonging to b1) should be filtered out
       expect(screen.queryByText('Student Slot Sat')).not.toBeInTheDocument();
       expect(screen.queryByText('Student Days Sat')).not.toBeInTheDocument();
+    });
+
+    it('passes time and duration to onLogLesson when clicking ✅ on a routine slot item', () => {
+      const mockStudents = [
+        {
+          id: 's_routine',
+          name: 'Routine Student',
+          active: true,
+          schedule: [{ day: 6, time: '09:30', duration: 90 }],
+        },
+      ];
+
+      const mockBatches = [
+        {
+          id: 'b_routine',
+          name: 'Routine Batch',
+          active: true,
+          studentIds: ['s_routine'],
+          schedule: [{ day: 6, time: '11:15', duration: 75 }],
+        },
+      ];
+
+      const mockStore = {
+        state: {
+          students: mockStudents,
+          batches: mockBatches,
+          lessons: [],
+        },
+        studentName: (id: string) => mockStudents.find(s => s.id === id)?.name || id,
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue(mockStore as any);
+
+      const onLogLesson = vi.fn();
+
+      render(
+        <ClassesView
+          onNavigate={vi.fn()}
+          onLogLesson={onLogLesson}
+        />
+      );
+
+      const routineTabBtn = screen.getByRole('button', { name: /Weekly Routine/i });
+      fireEvent.click(routineTabBtn);
+
+      const checkButtons = screen.getAllByRole('button', { name: '✅' });
+      expect(checkButtons.length).toBeGreaterThanOrEqual(2);
+
+      // Student check button
+      fireEvent.click(checkButtons[0]);
+      expect(onLogLesson).toHaveBeenCalledWith({
+        studentId: 's_routine',
+        time: '09:30',
+        duration: 90,
+      });
+
+      // Batch check button
+      fireEvent.click(checkButtons[1]);
+      expect(onLogLesson).toHaveBeenCalledWith({
+        batchId: 'b_routine',
+        time: '11:15',
+        duration: 75,
+      });
     });
   });
 
@@ -309,6 +374,230 @@ describe('ClassesView, MoneyView, and HomeView Integration Tests', () => {
         time: '17:00',
         duration: 60,
       });
+    });
+
+    it('links contractId from student active contract on quick absent in HomeView', () => {
+      const today = todayISO();
+      const dow = new Date().getDay();
+      const dayName = WEEKDAYS[dow];
+
+      const mockStudent = {
+        id: 's_absent_radar',
+        name: 'Absent Radar Student',
+        active: true,
+        subjects: ['Math'],
+        scheduleDays: [dayName],
+        scheduleTime: '16:00',
+      };
+
+      const mockContracts = [
+        {
+          id: 'c_ended_radar',
+          studentId: 's_absent_radar',
+          status: 'ended',
+          startDate: '2025-01-01',
+        },
+        {
+          id: 'c_active_radar',
+          studentId: 's_absent_radar',
+          status: 'active',
+          startDate: '2026-01-01',
+        },
+      ];
+
+      const mockSaveLesson = vi.fn();
+
+      const mockStore = {
+        state: {
+          students: [mockStudent],
+          contracts: mockContracts,
+          lessons: [],
+          payments: [],
+          batches: [],
+          settings: { tutorName: 'Teacher', currency: '৳' },
+          savedResources: [],
+        },
+        money: (n: number) => `৳${n}`,
+        studentName: () => 'Absent Radar Student',
+        saveLesson: mockSaveLesson,
+        toast: vi.fn(),
+        loadDemoData: vi.fn(),
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue(mockStore as any);
+
+      render(
+        <HomeView
+          onNavigate={vi.fn()}
+          onOpenLessonModal={vi.fn()}
+          onOpenPaymentModal={vi.fn()}
+          onOpenStudentModal={vi.fn()}
+        />
+      );
+
+      const absentBtn = screen.getByRole('button', { name: /Absent/i });
+      fireEvent.click(absentBtn);
+
+      expect(mockSaveLesson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId: 's_absent_radar',
+          contractId: 'c_active_radar',
+          status: 'absent',
+          date: today,
+          time: '16:00',
+          subject: 'Math',
+        })
+      );
+    });
+  });
+
+  describe('Contract Attribution, Schedule Summary & StudentsView Cycle Balance Badge', () => {
+    it('credits payments with contractId: null matching studentId and contract date range in contractStatus and studentBalance', () => {
+      const today = '2026-11-14';
+      const contract = {
+        id: 'c_unlinked',
+        studentId: 'std_unlinked',
+        title: 'Tuition',
+        fee: 4000,
+        cycleType: 'classes' as const,
+        cycleLength: 4,
+        billing: 'end' as const,
+        startDate: '2026-11-01',
+        status: 'active' as const,
+      };
+
+      const lessons = [
+        { id: 'l1', studentId: 'std_unlinked', contractId: 'c_unlinked', date: '2026-11-02', status: 'taught' as const },
+        { id: 'l2', studentId: 'std_unlinked', contractId: 'c_unlinked', date: '2026-11-04', status: 'taught' as const },
+        { id: 'l3', studentId: 'std_unlinked', contractId: 'c_unlinked', date: '2026-11-06', status: 'taught' as const },
+        { id: 'l4', studentId: 'std_unlinked', contractId: 'c_unlinked', date: '2026-11-08', status: 'taught' as const },
+      ];
+
+      // Payment has contractId: null (e.g. from BatchFeeModal or quick unassigned payment)
+      const payments = [
+        { id: 'p_unassigned', studentId: 'std_unlinked', contractId: null as any, amount: 4000, date: '2026-11-09' },
+      ];
+
+      const st = contractStatus(contract, lessons, payments, today);
+      expect(st.completed).toBe(1);
+      expect(st.billed).toBe(4000);
+      expect(st.paid).toBe(4000);
+      expect(st.balance).toBe(0);
+
+      const bal = studentBalance('std_unlinked', [contract], lessons, payments);
+      expect(bal).toBe(0);
+    });
+
+    it('formats scheduleDays and scheduleTime when schedule array is empty or undefined in scheduleSummary', () => {
+      const studentDaysAndTime = {
+        id: 's_days_time',
+        name: 'Days Student',
+        scheduleDays: ['Sun', 'Tue', 'Thu'],
+        scheduleTime: '16:30',
+      };
+
+      const studentDaysOnly = {
+        id: 's_days_only',
+        name: 'Days Only Student',
+        scheduleDays: ['Fri'],
+      };
+
+      const studentNoSchedule = {
+        id: 's_none',
+        name: 'No Schedule Student',
+      };
+
+      expect(scheduleSummary(studentDaysAndTime as any)).toBe('Sun, Tue, Thu · 4:30 PM');
+      expect(scheduleSummary(studentDaysOnly as any)).toBe('Fri');
+      expect(scheduleSummary(studentNoSchedule as any)).toBe('No fixed schedule');
+    });
+
+    it('displays the Owes balance badge alongside or on cycle completion when bal > 0.005 in StudentsView', () => {
+      const mockStudents = [
+        {
+          id: 's_cycle_due',
+          name: 'Cycle Due Student',
+          active: true,
+          grade: 'Class 9',
+        },
+        {
+          id: 's_in_progress_due',
+          name: 'Progress Due Student',
+          active: true,
+          grade: 'Class 10',
+        },
+      ];
+
+      // Student 1: 4 classes cycle, 4 classes taught (st.completed = 1, st.progress = 0), fee = 3000, 0 paid -> bal = 3000
+      // Cycle complete, payment due
+      const c1 = {
+        id: 'c1',
+        studentId: 's_cycle_due',
+        title: 'Tuition 1',
+        fee: 3000,
+        cycleType: 'classes' as const,
+        cycleLength: 4,
+        billing: 'end' as const,
+        startDate: '2026-11-01',
+        status: 'active' as const,
+      };
+
+      const l1 = [
+        { id: 'l1', studentId: 's_cycle_due', contractId: 'c1', date: '2026-11-02', status: 'taught' as const },
+        { id: 'l2', studentId: 's_cycle_due', contractId: 'c1', date: '2026-11-04', status: 'taught' as const },
+        { id: 'l3', studentId: 's_cycle_due', contractId: 'c1', date: '2026-11-06', status: 'taught' as const },
+        { id: 'l4', studentId: 's_cycle_due', contractId: 'c1', date: '2026-11-08', status: 'taught' as const },
+      ];
+
+      // Student 2: 4 classes cycle, 5 classes taught (st.completed = 1, 1 in cycle 2 -> progress = 25%), fee = 2000, 0 paid -> bal = 2000
+      const c2 = {
+        id: 'c2',
+        studentId: 's_in_progress_due',
+        title: 'Tuition 2',
+        fee: 2000,
+        cycleType: 'classes' as const,
+        cycleLength: 4,
+        billing: 'end' as const,
+        startDate: '2026-11-01',
+        status: 'active' as const,
+      };
+
+      const l2 = [
+        { id: 'l2_1', studentId: 's_in_progress_due', contractId: 'c2', date: '2026-11-02', status: 'taught' as const },
+        { id: 'l2_2', studentId: 's_in_progress_due', contractId: 'c2', date: '2026-11-04', status: 'taught' as const },
+        { id: 'l2_3', studentId: 's_in_progress_due', contractId: 'c2', date: '2026-11-06', status: 'taught' as const },
+        { id: 'l2_4', studentId: 's_in_progress_due', contractId: 'c2', date: '2026-11-08', status: 'taught' as const },
+        { id: 'l2_5', studentId: 's_in_progress_due', contractId: 'c2', date: '2026-11-10', status: 'taught' as const },
+      ];
+
+      const mockStore = {
+        state: {
+          students: mockStudents,
+          contracts: [c1, c2],
+          lessons: [...l1, ...l2],
+          payments: [],
+          batches: [],
+          settings: { tutorName: 'Teacher', currency: '৳' },
+        },
+        money: (n: number) => `৳${Number(n).toLocaleString()}`,
+      };
+
+      vi.spyOn(context, 'useStore').mockReturnValue(mockStore as any);
+
+      render(
+        <StudentsView
+          onNavigate={vi.fn()}
+          onOpenStudentModal={vi.fn()}
+        />
+      );
+
+      // Student 1 should render Cycle Complete AND Owes ৳3,000
+      expect(screen.getByText(/🎉 Cycle Complete · Payment Due!/i)).toBeInTheDocument();
+      expect(screen.getByText('Owes ৳3,000')).toBeInTheDocument();
+
+      // Student 2 should render 1 / 4 classes progress AND Owes ৳2,000
+      expect(screen.getAllByText((_content, element) => element?.textContent?.replace(/\s+/g, ' ').trim() === '1 / 4 classes').length).toBeGreaterThan(0);
+      expect(screen.getByText('Owes ৳2,000')).toBeInTheDocument();
     });
   });
 });

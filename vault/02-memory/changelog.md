@@ -6,6 +6,28 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
+## [2026-11-14] — Unlinked Payment Attribution, Schedule Days Fallback, Students View Cycle Badges & Test Consolidation
+- Updated `contractStatus` in `src/store/contracts.ts` to credit unlinked payments (`contractId: null` or falsy) matching `studentId` and contract date range (`p.date >= c.startDate && (!c.endDate || p.date <= c.endDate)`) up to today, accurately crediting batch fee and student payments.
+- Enhanced `expectedMonthlyFees` in `src/store/contracts.ts` to fall back to `weeklySlots = (s?.schedule?.length || s?.scheduleDays?.length || 0)` when estimating monthly tuition prior to 14 days of lesson history.
+- Enhanced `scheduleSummary` in `src/views/StudentsView.tsx` to format `scheduleDays` and `scheduleTime` when `schedule` array is empty (`${s.scheduleDays.join(', ')}${s.scheduleTime ? ' · ' + fmtTime(s.scheduleTime) : ''}`) before falling back to `'No fixed schedule'`.
+- Updated `StudentsView.tsx` student list cards to detect cycle completion when `(st.completed > 0 && st.progress === 0 && bal > 0.005) || progressPct >= 100`, and rendered both `cycleRender` and `balanceBadge(bal)` stacked when `bal > 0.005` with positive balance.
+- Consolidated duplicate test file by deleting untracked `src/tests/classesAndMoney.test.tsx` and adding comprehensive unit tests in `src/tests/classesMoneyAndRadar.test.tsx` verifying unlinked payment attribution, `scheduleDays` formatting, and dual cycle completion / due-balance badge display.
+- Updated `normalizeExam` in `src/services/ai.ts` to preserve `answer: null` when an MCQ has no answer key (`q.answer` is `null`, `undefined`, or `''`), preventing unwanted `0` defaults and enabling the "Set key…" answer selector in `ResultView.tsx`.
+- Enhanced `renderMarkdown` in `src/services/ai.ts` to detect inline `<svg>...</svg>` blocks, normalize them with `normalizeSvgString`, and render them as native high-contrast `<img>` diagram figures (`class="exam-fig"`) rather than escaping to `&lt;svg&gt;` text.
+- Added dark schematic contrast styling (`.exam-fig { ... }`) to the print iframe `<style>` in `AIView.tsx` so printed exams and worksheets preserve circuit and vector diagrams crisply on physical paper.
+- Integrated AI generation quota checks (`canUseAI` with reward modal/toast) and credit consumption (`consumeAiCredit()`) into `handleRevise` in `AIView.tsx`.
+- Added unit tests in `src/tests/aiAndSettings.test.tsx` verifying `normalizeExam` null-answer preservation across unkeyed MCQs and inline `<svg>` rendering in `renderMarkdown`.
+- Updated `HomeView.tsx` `handleQuickAbsent` to look up the student's active contract (`startDate <= today` and not `ended`) and pass `contractId` when marking absent lessons.
+- Hardened `HomeView.tsx` `hasAI` checklist check to consider both `state.savedResources` and `state.docs`, and filtered `soon` dues to only include active students with non-ended contracts.
+- Enhanced Today's Tuition Radar row styling in `HomeView.tsx` with `background: 'var(--card)', border: '1px solid var(--border)'` for full light/dark theme design token parity.
+- Upgraded `ClassesView.tsx` Weekly Routine view to support slot `duration`, iterate all matching slots on each weekday, and forward `time` and `duration` to `onLogLesson` when clicking the `✅` routine button.
+- Added comprehensive unit tests in `src/tests/classesAndMoney.test.tsx` and `src/tests/classesMoneyAndRadar.test.tsx` verifying routine slot `time`/`duration` forwarding and active `contractId` linking on quick absent.
+- Added `useEffect` in `src/views/SettingsView.tsx` syncing profile/settings and AI form inputs (`tutorName`, `currency`, `credentials`, `brandTitle`, `showPrintHeader`, `showPrintWatermark`, `notificationsEnabled`, `feeReminderNotifications`, `classReminderNotifications`, `provider`, `apiKey`, `selectedModel`) whenever `state.settings`, `state.profile`, or `state.ai` changes so cloud hydration, backup restore, and data erase immediately reflect in the UI.
+- Safely formatted numeric `billingState.proUntil` timestamps in `SettingsView.tsx` via `fmtDate(new Date(billingState.proUntil).toISOString().slice(0, 10))` under `Pro Until:`.
+- Implemented `localPendingReq` state and unified `pendingReq` resolution in `SettingsView.tsx` to immediately transition the UI to the `⏳ Verification Tracker` view upon submitting an upgrade request before remote billing sync completes, with automatic clearing on user switch or Pro activation.
+- Computed deduplicated saved AI documents count on `SettingsView.tsx` bottom summary line combining `state.savedResources` and `state.docs` via `new Set(...)`.
+- Added unit tests in `src/tests/aiAndSettings.test.tsx` verifying numeric `proUntil` timestamp date formatting, instant Verification Tracker transition with submitted TrxID, and form input re-synchronization on state changes.
+
 ## [2026-11-13] — Deep Undefined Firestore Sanitization & Root Tutor Metadata Indexing
 - Applied `stripUndefinedDeep` sanitization across all Firestore `setDoc` payloads in `src/store/context.tsx` (owner billing sync, owner role sync, initial state migration/upload, and 250ms debounced sync) to prevent Firestore SDK `Unsupported field value: undefined` write errors.
 - Added automatic lightweight root tutor metadata indexing to `doc(db, 'users', user.uid)` whenever `users/{uid}/data/appState` is saved, persisting `{ email, tutorName, studentCount, updatedAt }` with merge option to enable `getDocs(collection(db, 'users'))` in `fetchPlatformTelemetry` to reliably discover all registered tutors.

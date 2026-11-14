@@ -24,26 +24,62 @@ import {
   inferDiagramFromQuestion,
 } from '../services/ai';
 import { AIView } from '../views/AIView';
+import { SettingsView } from '../views/SettingsView';
 import { lazyWithRetry } from '../App';
 import * as context from '../store/context';
 import { sanitizePlaceholder } from '../utils/auth';
+import { fmtDate } from '../utils/date';
 
-vi.mock('../services/firebase', () => ({
-  app: {},
-  auth: { currentUser: { email: 'tutor@test.com' } },
-  db: null,
-  onAuthStateChanged: vi.fn((_auth, cb) => {
-    cb({ email: 'tutor@test.com' });
-    return () => {};
-  }),
-  resetUserPassword: vi.fn(),
-  googleProvider: {},
-  signInWithPopup: vi.fn(),
-  signInWithEmailAndPassword: vi.fn(),
-  createUserWithEmailAndPassword: vi.fn(),
-  signOut: vi.fn(),
-  fetchPricingConfig: vi.fn(() => Promise.resolve({ monthlyPriceBdt: 99, freeStudentLimit: 15 })),
-}));
+vi.mock('../services/firebase', async (importOriginal) => {
+  const actual = (await importOriginal()) as any;
+  return {
+    ...actual,
+    app: {},
+    auth: { currentUser: { uid: 'tutor_test_uid', email: 'tutor@test.com', displayName: 'Test Tutor' } },
+    db: null,
+    onAuthStateChanged: vi.fn((_auth, cb) => {
+      cb({ uid: 'tutor_test_uid', email: 'tutor@test.com', displayName: 'Test Tutor' });
+      return () => {};
+    }),
+    resetUserPassword: vi.fn(),
+    googleProvider: {},
+    signInWithPopup: vi.fn(),
+    signInWithEmailAndPassword: vi.fn(),
+    createUserWithEmailAndPassword: vi.fn(),
+    signOut: vi.fn(),
+    fetchPricingConfig: vi.fn(() =>
+      Promise.resolve({
+        monthlyPriceBdt: 99,
+        yearlyPriceBdt: 999,
+        freeStudentLimit: 15,
+        bkashNumber: '01711111111',
+        nagadNumber: '01722222222',
+        rocketNumber: '01733333333',
+        promoCodes: [],
+      })
+    ),
+    submitTrxUpgradeRequest: vi.fn((uid, email, name, payload) =>
+      Promise.resolve({
+        id: 'req_test_123',
+        uid,
+        userEmail: email,
+        userName: name,
+        method: payload.method,
+        senderPhone: payload.senderPhone,
+        trxId: payload.trxId,
+        amount: payload.amount,
+        planTerm: payload.planTerm,
+        billingCycle: payload.billingCycle,
+        finalAmountBdt: payload.finalAmountBdt,
+        status: 'pending',
+        createdAt: '2026-11-14T12:00:00.000Z',
+      })
+    ),
+    fetchPendingUpgradeRequests: vi.fn(() => Promise.resolve([])),
+    reviewUpgradeRequest: vi.fn(),
+    updatePricingConfig: vi.fn(),
+  };
+});
 
 const originalFetch = global.fetch;
 
@@ -1157,6 +1193,238 @@ describe('Exam Invalidation & normalizeExam Guards', () => {
       expect(decoded).not.toContain('stroke="black"');
       expect(decoded).not.toContain("fill='black'");
       expect(decoded).not.toContain('fill="black"');
+    });
+
+    it('preserves answer: null when an MCQ item has answer: null or undefined and extracts numeric index when present', () => {
+      const rawExam = {
+        title: 'Mixed MCQ Exam',
+        questions: [
+          {
+            id: 'q_no_ans_null',
+            type: 'mcq',
+            text: 'What is the capital of Bangladesh?',
+            options: ['Dhaka', 'Chittagong', 'Sylhet', 'Rajshahi'],
+            answer: null,
+          },
+          {
+            id: 'q_no_ans_undef',
+            type: 'mcq',
+            text: 'What is 5 + 7?',
+            options: ['10', '11', '12', '13'],
+            // answer omitted / undefined
+          },
+          {
+            id: 'q_no_ans_empty',
+            type: 'mcq',
+            text: 'Identify the odd one',
+            options: ['Apple', 'Banana', 'Carrot'],
+            answer: '',
+          },
+          {
+            id: 'q_with_num_ans',
+            type: 'mcq',
+            text: 'What is 3 * 3?',
+            options: ['6', '8', '9', '12'],
+            answer: 2,
+          },
+          {
+            id: 'q_with_letter_ans',
+            type: 'mcq',
+            text: 'What is the boiling point of water?',
+            options: ['50C', '80C', '100C', '120C'],
+            answer: 'Answer: C',
+          },
+          {
+            id: 'q_with_text_leak_ans',
+            type: 'mcq',
+            text: 'What is the chemical formula of water? Answer: A',
+            options: ['H2O', 'CO2', 'NaCl', 'O2'],
+          },
+        ],
+      };
+
+      const normalized = normalizeExam(rawExam);
+      const q1 = normalized.questions[0] as any;
+      const q2 = normalized.questions[1] as any;
+      const q3 = normalized.questions[2] as any;
+      const q4 = normalized.questions[3] as any;
+      const q5 = normalized.questions[4] as any;
+      const q6 = normalized.questions[5] as any;
+
+      expect(q1.answer).toBeNull();
+      expect(q2.answer).toBeNull();
+      expect(q3.answer).toBeNull();
+      expect(q4.answer).toBe(2);
+      expect(q5.answer).toBe(2);
+      expect(q6.answer).toBe(0);
+    });
+
+    it('converts inline <svg>...</svg> blocks into <img src="data:image/svg+xml;utf8,..." class="exam-fig" ... /> instead of raw escaped &lt;svg&gt; text in renderMarkdown', () => {
+      const mdWithSvg = 'Here is the circuit diagram:\n<svg viewBox="0 0 200 100"><circle cx="50" cy="50" r="30" stroke="black"/></svg>\nAnalyze the circuit.';
+      const rendered = renderMarkdown(mdWithSvg);
+
+      expect(rendered).not.toContain('&lt;svg');
+      expect(rendered).not.toContain('&lt;/svg&gt;');
+      expect(rendered).toContain('<img src="data:image/svg+xml;utf8,');
+      expect(rendered).toContain('class="exam-fig"');
+      expect(rendered).toContain('alt="Diagram"');
+
+      // Verify the SVG within the data URI has been normalized with dark theme styles
+      const match = rendered.match(/<img src="([^"]+)"/);
+      expect(match).not.toBeNull();
+      const decodedSvg = decodeURIComponent(match![1]);
+      expect(decodedSvg).toContain('xmlns="http://www.w3.org/2000/svg"');
+      expect(decodedSvg).toContain('stroke="#38bdf8"');
+    });
+  });
+});
+
+describe('SettingsView Billing & Upgrade Transitions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders a formatted date string under Pro Until for numeric billingState.proUntil timestamps', async () => {
+    const timestamp = Date.now() + 1000 * 60 * 60 * 24 * 30; // 30 days in future
+    const expectedFormatted = fmtDate(new Date(timestamp).toISOString().slice(0, 10));
+
+    vi.spyOn(context, 'useStore').mockReturnValue({
+      state: {
+        settings: { tutorName: 'Master Tutor', currency: '৳' },
+        profile: {},
+        ai: { provider: 'gemini', keys: {}, models: {} },
+        students: [],
+        lessons: [],
+        payments: [],
+        docs: [],
+        savedResources: [],
+      },
+      billingState: {
+        plan: 'pro',
+        proUntil: timestamp,
+      },
+      user: { email: 'tutor@test.com' },
+      updateSettings: vi.fn(),
+      updateProfile: vi.fn(),
+      updateAI: vi.fn(),
+      loadDemoData: vi.fn(),
+      eraseAllData: vi.fn(),
+      exportBackup: vi.fn(),
+      importBackup: vi.fn(),
+      downloadFile: vi.fn(),
+      toast: vi.fn(),
+    } as any);
+
+    render(<SettingsView />);
+
+    await waitFor(() => {
+      const proUntilEl = screen.getByText(/Pro Until:/i);
+      expect(proUntilEl).toBeInTheDocument();
+      expect(proUntilEl.textContent).toContain(`Pro Until: ${expectedFormatted}`);
+    });
+  });
+
+  it('immediately transitions the UI to the ⏳ Verification Tracker view with the submitted TrxID upon upgrade request submit', async () => {
+    vi.spyOn(context, 'useStore').mockReturnValue({
+      state: {
+        settings: { tutorName: 'Regular Tutor', currency: '৳' },
+        profile: {},
+        ai: { provider: 'gemini', keys: {}, models: {} },
+        students: [],
+        lessons: [],
+        payments: [],
+        docs: [],
+        savedResources: [],
+      },
+      billingState: {
+        plan: 'free',
+        pendingRequest: null,
+      },
+      user: { email: 'regular@tutor.com' },
+      updateSettings: vi.fn(),
+      updateProfile: vi.fn(),
+      updateAI: vi.fn(),
+      loadDemoData: vi.fn(),
+      eraseAllData: vi.fn(),
+      exportBackup: vi.fn(),
+      importBackup: vi.fn(),
+      downloadFile: vi.fn(),
+      toast: vi.fn(),
+    } as any);
+
+    render(<SettingsView />);
+
+    // Wait for the upgrade section form to be visible
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('017...')).toBeInTheDocument();
+    });
+
+    // Enter phone and TrxID
+    fireEvent.change(screen.getByPlaceholderText('017...'), {
+      target: { value: '01712345678' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('e.g. BJM82K9L0P'), {
+      target: { value: 'TRX998877' },
+    });
+
+    // Submit upgrade form
+    fireEvent.click(screen.getByText('Submit Payment Details'));
+
+    // Should immediately transition to Verification Tracker with the submitted TrxID
+    await waitFor(() => {
+      expect(screen.getByText(/Verification Tracker/i)).toBeInTheDocument();
+      expect(screen.getByText(/TRX998877/)).toBeInTheDocument();
+    });
+  });
+
+  it('syncs form inputs when state.settings, state.profile, or state.ai changes (cloud hydration / restore)', async () => {
+    const mockState: any = {
+      settings: { tutorName: 'Initial Name', currency: '৳' },
+      profile: { credentials: 'B.Sc.', brandTitle: 'Initial Academy' },
+      ai: { provider: 'gemini', keys: { gemini: 'key-1' }, models: { gemini: 'gemini-3.8-flash' } },
+      students: [],
+      lessons: [],
+      payments: [],
+      docs: [],
+      savedResources: [],
+    };
+
+    const storeMock = {
+      state: mockState,
+      billingState: null,
+      user: { email: 'tutor@test.com' },
+      updateSettings: vi.fn(),
+      updateProfile: vi.fn(),
+      updateAI: vi.fn(),
+      loadDemoData: vi.fn(),
+      eraseAllData: vi.fn(),
+      exportBackup: vi.fn(),
+      importBackup: vi.fn(),
+      downloadFile: vi.fn(),
+      toast: vi.fn(),
+    };
+
+    vi.spyOn(context, 'useStore').mockImplementation(() => storeMock as any);
+
+    const { rerender } = render(<SettingsView />);
+
+    const nameInput = screen.getByPlaceholderText('Shown in parent payment reminders') as HTMLInputElement;
+    expect(nameInput.value).toBe('Initial Name');
+
+    // Simulate hydration or backup restore
+    storeMock.state = {
+      ...mockState,
+      settings: { tutorName: 'Hydrated Tutor', currency: '$' },
+      profile: { credentials: 'M.Sc.', brandTitle: 'Hydrated Academy' },
+      ai: { provider: 'gemini', keys: { gemini: 'hydrated-key' }, models: { gemini: 'gemini-3.7-flash' } },
+    };
+
+    rerender(<SettingsView />);
+
+    await waitFor(() => {
+      expect(nameInput.value).toBe('Hydrated Tutor');
+      expect(screen.getByPlaceholderText(/e.g. B.Sc. in CSE/i)).toHaveValue('M.Sc.');
+      expect(screen.getByPlaceholderText(/e.g. Sazid's/i)).toHaveValue('Hydrated Academy');
     });
   });
 });

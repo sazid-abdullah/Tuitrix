@@ -405,6 +405,15 @@ export const AIView: React.FC<AIViewProps> = ({
     e.preventDefault();
     if (!result || !revisionInput.trim() || busy) return;
 
+    if (!canUseAI) {
+      if (quota.canWatchAd) {
+        setRewardModalOpen(true);
+      } else {
+        toast('Daily Free AI limit reached. Add your own API key or upgrade to Pro.', 'error');
+      }
+      return;
+    }
+
     setBusy('Applying requested changes…');
     try {
       const revised = cleanDoc(
@@ -415,6 +424,7 @@ export const AIView: React.FC<AIViewProps> = ({
           { onFallback: (msg) => toast(msg, 'info') }
         )
       );
+      consumeAiCredit();
       setResult(prev =>
         prev
           ? {
@@ -565,6 +575,7 @@ export const AIView: React.FC<AIViewProps> = ({
       .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 6rem; opacity: 0.04; pointer-events: none; z-index: -1; white-space: nowrap; text-align: center; color: #000; font-weight: bold; }
       .print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 9pt; color: #666; padding: 10px 0; border-top: 1px solid #ddd; }
       .content { padding-bottom: 40px; }
+      .exam-fig { display: block; max-width: 280px; max-height: 180px; width: auto; height: auto; margin: 8px 0; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     </style></head><body>
       ${watermarkHtml}
       <div class="content">

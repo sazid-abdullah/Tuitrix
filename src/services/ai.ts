@@ -540,7 +540,10 @@ export function splitAnswerKey(md: string) {
 }
 
 export function renderMarkdown(md: string): string {
-  const lines = esc(md || '').replace(/\r/g, '').split('\n');
+  const preprocessed = String(md || '').replace(/<svg[\s\S]*?<\/svg>/gi, (svgMatch) => {
+    return `![Diagram](data:image/svg+xml;utf8,${encodeURIComponent(normalizeSvgString(svgMatch))})`;
+  });
+  const lines = esc(preprocessed).replace(/\r/g, '').split('\n');
   const out: string[] = [];
   let list: 'ul' | 'ol' | null = null;
   let para: string[] = [];
@@ -1370,9 +1373,9 @@ export function normalizeExam(raw: any): Exam {
           .filter(Boolean);
 
         const textRaw = String(q.text || '');
-        let ans = typeof q.answer === 'number' ? q.answer : 0;
-        if (typeof q.answer === 'string') {
-          const lMatch = q.answer.match(/(?:Answer|Ans\s*[:.-]?)?\s*(?:\(([a-d])\)|([a-d]))/i);
+        let ans: number | null = typeof q.answer === 'number' && !isNaN(q.answer) ? q.answer : null;
+        if (typeof q.answer === 'string' && q.answer.trim() !== '') {
+          const lMatch = q.answer.match(/(?:(?:Answer|Ans)\s*[:.-]?\s*)?(?:\(([a-d])\)|([a-d]))\s*$/i);
           if (lMatch) {
             ans = (lMatch[1] || lMatch[2]).toUpperCase().charCodeAt(0) - 65;
           } else if (/^\d+$/.test(q.answer.trim())) {
@@ -1380,7 +1383,7 @@ export function normalizeExam(raw: any): Exam {
           }
         }
         const textAnsMatch = textRaw.match(/(?:\(?\s*(?:Answer|Ans)\s*[:.-]?\s*(?:\(([a-d])\)|([a-d]))\.?\s*\)?)(?:\*{1,2})?\s*$/i);
-        if (textAnsMatch && (q.answer === undefined || q.answer === 0)) {
+        if (textAnsMatch && (ans === null || q.answer === 0)) {
           const letter = (textAnsMatch[1] || textAnsMatch[2]).toUpperCase();
           ans = letter.charCodeAt(0) - 65;
         }

@@ -45,7 +45,7 @@ export function statusBadge(status: string) {
 export function computeChecklistProgress(state: any) {
   const hasStudent = state.students?.length > 0;
   const hasLesson = state.lessons?.length > 0;
-  const hasAI = state.savedResources?.length > 0;
+  const hasAI = Boolean((state.savedResources && state.savedResources.length > 0) || (state.docs && state.docs.length > 0));
   const hasSettings = !!state.settings?.tutorName;
   return { hasStudent, hasLesson, hasAI, hasSettings };
 }
@@ -96,7 +96,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const hasStudent = state.students.length > 0;
   const hasLesson = state.lessons.length > 0;
-  const hasAI = state.savedResources && state.savedResources.length > 0;
+  const hasAI = Boolean((state.savedResources && state.savedResources.length > 0) || (state.docs && state.docs.length > 0));
   const hasSettings = !!state.settings.tutorName;
 
   const handleDismissChecklist = () => {
@@ -275,7 +275,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const owed = dues
     .filter(x => x.st.balance > 0.005)
     .sort((a, b) => (a.st.owedSince || '9').localeCompare(b.st.owedSince || '9'));
-  const soon = dues.filter(x => isDueSoon(x.c, x.st));
+  const soon = dues.filter(x => x.s?.active !== false && x.c.status !== 'ended' && isDueSoon(x.c, x.st));
   const outstanding = owed.reduce((a, x) => a + x.st.balance, 0);
 
   const recentLessons = [...state.lessons]
@@ -311,8 +311,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const handleQuickAbsent = (sid: string, slotTime: string) => {
     const s = state.students.find(x => x.id === sid);
+    const activeContract = state.contracts.find(c => c.studentId === sid && c.status !== 'ended' && c.startDate <= today);
     saveLesson({
       studentId: sid,
+      contractId: activeContract?.id || null,
       date: today,
       time: slotTime,
       status: 'absent',
@@ -374,7 +376,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               const resolvedDuration = individualSlot?.duration || batchSlot?.duration || 60;
 
               return (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: '10px' }}>
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {renderAvatar(s, 32)}
                     <div>

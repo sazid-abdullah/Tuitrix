@@ -56,6 +56,26 @@ export const SettingsView: React.FC = () => {
   const [pushStatus, setPushStatus] = useState<string>('Not Enabled');
 
   useEffect(() => {
+    setTutorName(state.settings.tutorName || '');
+    setCurrency(state.settings.currency || '৳');
+    setCredentials(
+      sanitizePlaceholder(state.profile?.credentials || (state.settings as any)?.tutorCredentials)
+    );
+    setBrandTitle(
+      sanitizePlaceholder(state.profile?.brandTitle || (state.settings as any)?.coachingName)
+    );
+    setShowPrintHeader(state.profile?.showPrintHeader ?? true);
+    setShowPrintWatermark(state.profile?.showPrintWatermark ?? true);
+    setNotificationsEnabled(state.profile?.notificationsEnabled ?? false);
+    setFeeReminderNotifications(state.profile?.feeReminderNotifications ?? true);
+    setClassReminderNotifications(state.profile?.classReminderNotifications ?? true);
+    const p = state.ai.provider;
+    setProvider(p);
+    setApiKey(state.ai.keys?.[p] || '');
+    setSelectedModel(sanitizeModelId(state.ai.models?.[p] || ''));
+  }, [state.settings, state.profile, state.ai]);
+
+  useEffect(() => {
     if ('Notification' in window) {
       if (Notification.permission === 'granted') {
         setPushStatus('Enabled');
@@ -85,6 +105,17 @@ export const SettingsView: React.FC = () => {
   const [promoInput, setPromoInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{code: string; discountPercent: number} | null>(null);
   const [promoError, setPromoError] = useState('');
+  const [localPendingReq, setLocalPendingReq] = useState<any>(null);
+
+  useEffect(() => {
+    setLocalPendingReq(null);
+  }, [user]);
+
+  useEffect(() => {
+    if (isPro) {
+      setLocalPendingReq(null);
+    }
+  }, [isPro]);
 
 
   const [adminRequests, setAdminRequests] = useState<TrxUpgradeRequest[]>([]);
@@ -367,7 +398,7 @@ export const SettingsView: React.FC = () => {
 
     setIsSubmittingUpgrade(true);
     try {
-      await submitTrxUpgradeRequest(
+      const req = await submitTrxUpgradeRequest(
         auth.currentUser.uid,
         auth.currentUser.email!,
         auth.currentUser.displayName || undefined,
@@ -383,6 +414,7 @@ export const SettingsView: React.FC = () => {
           finalAmountBdt: finalAmount
         }
       );
+      setLocalPendingReq({ ...req, status: 'pending' });
       toast('Upgrade request submitted successfully! Waiting for verification.', 'success');
     } catch (err) {
       toast('Failed to submit request', 'error');
@@ -419,6 +451,8 @@ export const SettingsView: React.FC = () => {
       toast('Failed to update request', 'error');
     }
   };
+
+  const pendingReq = (billingState?.pendingRequest?.status === 'pending' ? billingState.pendingRequest : null) || (localPendingReq?.status === 'pending' ? localPendingReq : null);
 
   return (
     <div>
@@ -493,18 +527,18 @@ export const SettingsView: React.FC = () => {
             <div>
               <p>Current Plan: <strong>{isPro ? 'Pro Tier' : 'Free Tier'}</strong></p>
               {isPro && billingState?.proUntil && (
-                <p>Pro Until: {fmtDate(billingState.proUntil)}</p>
+                <p>Pro Until: {fmtDate(new Date(billingState.proUntil).toISOString().slice(0, 10))}</p>
               )}
               {!isPro && (!billingState || billingState.plan === 'free') && (
                 <p>AI Credits: <strong>{billingState?.credits || 0}</strong></p>
               )}
 
-              {!isPro && billingState?.pendingRequest && billingState.pendingRequest.status === 'pending' && (
+              {!isPro && pendingReq && (
                 <div style={{ marginTop: '24px', padding: '20px', background: 'var(--card2)', borderRadius: '8px', borderLeft: '4px solid var(--accent)' }}>
                   <h4 style={{ marginBottom: '16px' }}>⏳ Verification Tracker</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      ● Step 1: Payment Details Submitted (TrxID: {billingState.pendingRequest.trxId})
+                      ● Step 1: Payment Details Submitted (TrxID: {pendingReq.trxId})
                     </div>
                     <div style={{ color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
                       <span className="pulse">◉</span> Step 2: Admin Verification in Progress (Typically 15–60 mins)
@@ -514,16 +548,16 @@ export const SettingsView: React.FC = () => {
                     </div>
                   </div>
                   <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg)', borderRadius: '4px', fontSize: '0.9rem' }}>
-                    <div><strong>Method:</strong> {billingState.pendingRequest.method.toUpperCase()}</div>
-                    <div><strong>Amount:</strong> ৳{billingState.pendingRequest.finalAmountBdt || billingState.pendingRequest.amount}</div>
-                    {billingState.pendingRequest.promoCodeUsed && <div><strong>Promo:</strong> {billingState.pendingRequest.promoCodeUsed}</div>}
-                    <div><strong>Submitted:</strong> {fmtDate(billingState.pendingRequest.createdAt)}</div>
+                    <div><strong>Method:</strong> {pendingReq.method?.toUpperCase() || ''}</div>
+                    <div><strong>Amount:</strong> ৳{pendingReq.finalAmountBdt || pendingReq.amount}</div>
+                    {pendingReq.promoCodeUsed && <div><strong>Promo:</strong> {pendingReq.promoCodeUsed}</div>}
+                    <div><strong>Submitted:</strong> {fmtDate(pendingReq.createdAt)}</div>
                   </div>
                   <button
                     className="btn primary"
                     style={{ marginTop: '16px', width: '100%', background: '#25D366', color: '#fff' }}
                     onClick={() => {
-                      const msg = `Hi! I just submitted an upgrade request for Tuitrix Pro.\nEmail: ${auth?.currentUser?.email}\nPlan: ${billingState.pendingRequest?.planTerm}\nAmount: ৳${billingState.pendingRequest?.finalAmountBdt || billingState.pendingRequest?.amount}\nTrxID: ${billingState.pendingRequest?.trxId}`;
+                      const msg = `Hi! I just submitted an upgrade request for Tuitrix Pro.\nEmail: ${auth?.currentUser?.email}\nPlan: ${pendingReq?.planTerm}\nAmount: ৳${pendingReq?.finalAmountBdt || pendingReq?.amount}\nTrxID: ${pendingReq?.trxId}`;
                       const targetNumber = formatBdWhatsAppNumber(pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '');
                       window.open(`https://wa.me/${targetNumber}?text=${encodeURIComponent(msg)}`, '_blank');
                     }}
@@ -533,7 +567,7 @@ export const SettingsView: React.FC = () => {
                 </div>
               )}
 
-              {!isPro && (!billingState?.pendingRequest || billingState.pendingRequest.status !== 'pending') && (
+              {!isPro && !pendingReq && (
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                   <h3 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>🚀 Upgrade to Tuitrix Pro</h3>
 
@@ -1090,7 +1124,7 @@ export const SettingsView: React.FC = () => {
 
         <p className="muted small" style={{ textAlign: 'center', marginTop: '12px' }}>
           {(state.students || []).length} students · {(state.lessons || []).length} logged classes ·{' '}
-          {(state.payments || []).length} payments · {(state.docs || []).length} saved AI documents
+          {(state.payments || []).length} payments · {new Set([...(state.savedResources || []).map(r => r.id), ...(state.docs || []).map(d => d.id)]).size} saved AI documents
         </p>
       </div>
 

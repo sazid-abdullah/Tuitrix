@@ -89,7 +89,7 @@ export function contractStatus(
 
   const billed = billedCycles * fee;
   const paid = payments
-    .filter(p => p.contractId === c.id && p.date <= today)
+    .filter(p => (p.contractId === c.id || (!p.contractId && p.studentId === c.studentId && p.date >= c.startDate && (!c.endDate || p.date <= c.endDate))) && p.date <= today)
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const balance = billed - paid;
 
@@ -201,9 +201,10 @@ export function expectedMonthlyFees(state: AppState, today: string = todayISO())
     if (c.cycleType === 'classes') {
       const windowDays = Math.min(60, daysBetween(c.startDate, today));
       const linked = contractLessons(state.lessons, c, today).filter(l => l.date > addDays(today, -windowDays)).length;
+      const weeklySlots = (s?.schedule?.length || s?.scheduleDays?.length || 0);
       classes = windowDays >= 14 && linked
         ? (linked * AVG_MONTH_DAYS) / windowDays
-        : ((s?.schedule || []).length / (classContracts[c.studentId] || 1)) * (AVG_MONTH_DAYS / 7);
+        : (weeklySlots / (classContracts[c.studentId] || 1)) * (AVG_MONTH_DAYS / 7);
     }
     total += c.cycleType === 'months' ? fee / n : c.cycleType === 'days' ? (fee * AVG_MONTH_DAYS) / n : (fee * classes) / n;
     count++;

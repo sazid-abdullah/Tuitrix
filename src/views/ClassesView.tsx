@@ -9,7 +9,7 @@ interface ClassesViewProps {
   initialStudentFilter?: string;
   initialBatchFilter?: string;
   onNavigate: (route: string, param?: string) => void;
-  onLogLesson: (opts: { studentId?: string; batchId?: string; lesson?: Lesson }) => void;
+  onLogLesson: (opts: { studentId?: string; batchId?: string; time?: string; duration?: number; lesson?: Lesson }) => void;
 }
 
 export const ClassesView: React.FC<ClassesViewProps> = ({
@@ -91,23 +91,31 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
             const isToday = i === todayBanglaIndex;
             const banglaIndexToJsDay: Record<number, number> = { 0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 };
             const jsDay = banglaIndexToJsDay[i];
-            const scheduledItems: { id: string; name: string; type: 'student' | 'batch'; time: string }[] = [];
+            const scheduledItems: { id: string; name: string; type: 'student' | 'batch'; time: string; duration?: number }[] = [];
 
             state.students.filter(s => s.active !== false).forEach(s => {
               if (studentFilter && s.id !== studentFilter) return;
               if (batchFilter && s.batchId !== batchFilter && !(state.batches || []).some(b => b.id === batchFilter && b.studentIds.includes(s.id))) return;
-              const matchingSlot = s.schedule?.find(sl => Number(sl.day) === jsDay);
-              if (s.scheduleDays?.includes(day) || matchingSlot) {
-                scheduledItems.push({ id: s.id, name: s.name, type: 'student', time: matchingSlot?.time || s.scheduleTime || '' });
+              const matchingSlots = (s.schedule || []).filter(sl => Number(sl.day) === jsDay);
+              if (matchingSlots.length > 0) {
+                matchingSlots.forEach(sl => {
+                  scheduledItems.push({ id: s.id, name: s.name, type: 'student', time: sl.time || '', duration: sl.duration || 60 });
+                });
+              } else if (s.scheduleDays?.includes(day)) {
+                scheduledItems.push({ id: s.id, name: s.name, type: 'student', time: s.scheduleTime || '', duration: 60 });
               }
             });
 
             state.batches?.filter(b => b.active !== false).forEach(b => {
               if (batchFilter && b.id !== batchFilter) return;
               if (studentFilter && !b.studentIds.includes(studentFilter)) return;
-              const matchingSlot = b.schedule?.find(sl => Number(sl.day) === jsDay);
-              if (b.scheduleDays?.includes(day) || matchingSlot) {
-                scheduledItems.push({ id: b.id, name: b.name, type: 'batch', time: matchingSlot?.time || b.scheduleTime || '' });
+              const matchingSlots = (b.schedule || []).filter(sl => Number(sl.day) === jsDay);
+              if (matchingSlots.length > 0) {
+                matchingSlots.forEach(sl => {
+                  scheduledItems.push({ id: b.id, name: b.name, type: 'batch', time: sl.time || '', duration: sl.duration || 60 });
+                });
+              } else if (b.scheduleDays?.includes(day)) {
+                scheduledItems.push({ id: b.id, name: b.name, type: 'batch', time: b.scheduleTime || '', duration: 60 });
               }
             });
 
@@ -123,15 +131,15 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
                   <div className="muted small">No classes</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {scheduledItems.map(item => (
-                      <div key={item.id + item.type} style={{ padding: '8px', background: 'var(--bg)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {scheduledItems.map((item, idx) => (
+                      <div key={`${item.id}-${item.type}-${item.time}-${idx}`} style={{ padding: '8px', background: 'var(--bg)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontWeight: 500 }}>{item.name} {item.type === 'batch' && <span className="badge">Batch</span>}</div>
                           <div className="muted small">{item.time ? fmtTime(item.time) : 'Time not set'}</div>
                         </div>
                         <button
                           className="btn sm ghost"
-                          onClick={() => item.type === 'batch' ? onLogLesson({ batchId: item.id }) : onLogLesson({ studentId: item.id })}
+                          onClick={() => item.type === 'batch' ? onLogLesson({ batchId: item.id, time: item.time, duration: item.duration }) : onLogLesson({ studentId: item.id, time: item.time, duration: item.duration })}
                         >
                           ✅
                         </button>
