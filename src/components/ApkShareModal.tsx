@@ -9,6 +9,7 @@ interface ApkShareModalProps {
 export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose }) => {
   const [copied, setCopied] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -22,13 +23,13 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
-  const apkUrl = import.meta.env.VITE_ANDROID_APK_URL || '/tuitrix-latest.apk';
+  const envApkUrl = import.meta.env.VITE_ANDROID_APK_URL;
   const appUrl = window.location.origin;
 
   const handleDownload = async () => {
     // If we have an APK url specified and it is an actual URL, navigate to it
-    if (import.meta.env.VITE_ANDROID_APK_URL) {
-      window.location.href = import.meta.env.VITE_ANDROID_APK_URL;
+    if (envApkUrl) {
+      window.location.href = envApkUrl;
     } else if (deferredPrompt) {
       // Trigger PWA install
       deferredPrompt.prompt();
@@ -37,15 +38,16 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
         setDeferredPrompt(null);
       }
     } else {
-      // Show fallback alert
-      alert("To install as PWA: Tap the Browser Menu (⋮) and select 'Install App' or 'Add to Home Screen'.");
+      setShowInstallHelp(true);
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(appUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard?.writeText(appUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
 
   const shareText = encodeURIComponent(`Manage your tuition batches, track payments & generate AI exams with Tuitrix! ${appUrl}`);
@@ -64,6 +66,11 @@ export const ApkShareModal: React.FC<ApkShareModalProps> = ({ isOpen, onClose })
           <button className="btn primary" style={{ width: '100%', padding: '14px', fontSize: '1.05rem' }} onClick={handleDownload}>
             📥 Download Android APK
           </button>
+          {showInstallHelp && (
+            <div className="notice" style={{ textAlign: 'left', width: '100%', fontSize: '0.9rem' }}>
+              To install Tuitrix: tap your browser menu (⋮) and choose 'Install App' or 'Add to Home Screen', or download the APK from GitHub Releases below.
+            </div>
+          )}
           <p style={{marginTop: '0px', fontSize: '0.9rem'}}><a href="https://github.com/sazid-abdullah/Tuitrix/releases/latest" target="_blank" rel="noreferrer">Or download latest Release from GitHub</a></p>
 
           <div style={{ padding: '16px', background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', width: '100%' }}>

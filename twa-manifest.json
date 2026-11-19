@@ -12,8 +12,11 @@
   "backgroundColor": "#0f1115",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://tuitrix.com/icons/icon.svg",
+  "iconUrl": "https://tuitrix.com/icons/icon-512.png",
+  "maskableIconUrl": "https://tuitrix.com/icons/icon-512.png",
   "splashScreenFadeOutDuration": 300,
-  "sortBrowserVersion": 90,
+  "minSdkVersion": 23,
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
   "fallbackType": "customtabs"
 }

@@ -7,6 +7,8 @@ tags: [changelog, history, releases]
 # 📜 Engineering Changelog
 
 ## [2026-11-14] — Unlinked Payment Attribution, Schedule Days Fallback, Students View Cycle Badges & Test Consolidation
+- Generated Play Store 192x192 and 512x512 PNG icons, aligned TWA & web app manifests, and added inline PWA install guide in `ApkShareModal.tsx` with test coverage in `src/tests/apkShareModal.test.tsx`.
+- Standardized Android package ID to `com.tuitrix.app` across Capacitor and TWA, added CI Firebase secret injection for APK/AAB builds, and added deploy-time `assetlinks.json` SHA-256 fingerprint injection.
 - Integrated NCTB board exam presets (`BOARD_EXAM_PRESETS`, `getPresetById` in `src/utils/examPresets.ts`) and 2-column board paper print mode in `AIView.tsx` with full test coverage in `src/tests/examPresets.test.ts` and `src/tests/printBranding.test.tsx`.
 - Integrated Bulk WhatsApp Fee Reminder Queue in `MoneyView.tsx` (bilingual EN/BN toggle, custom payment notes, sequential send queue, copy action) with BD phone normalizer & reminder utilities in `src/utils/whatsapp.ts`, polished modals/settings, and test coverage in `src/tests/moneyReminderQueue.test.tsx` and `src/tests/whatsappReminder.test.ts`.
 - Updated `contractStatus` in `src/store/contracts.ts` to credit unlinked payments (`contractId: null` or falsy) matching `studentId` and contract date range (`p.date >= c.startDate && (!c.endDate || p.date <= c.endDate)`) up to today, accurately crediting batch fee and student payments.

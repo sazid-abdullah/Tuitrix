@@ -39,6 +39,11 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      - name: Inject Android Asset Links SHA-256
+        env:
+          ANDROID_SHA256: ${{ secrets.VITE_ANDROID_CERT_SHA256 }}
+        run: |
+          node -e "const fs = require('fs'); const sha = process.env.ANDROID_SHA256; const file = 'dist/.well-known/assetlinks.json'; if (sha && fs.existsSync(file)) { const content = fs.readFileSync(file, 'utf8'); fs.writeFileSync(file, content.replace('VITE_ANDROID_CERT_SHA256', sha)); }"
       - name: Copy index.html to 404.html
         run: cp dist/index.html dist/404.html
       - name: Setup Pages

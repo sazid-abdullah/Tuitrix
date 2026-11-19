@@ -1,5 +1,5 @@
 {
-  "appId": "com.sazidabdullah.tuitrix",
+  "appId": "com.tuitrix.app",
   "appName": "Tuitrix",
   "webDir": "dist",
   "server": { "androidScheme": "https" }
