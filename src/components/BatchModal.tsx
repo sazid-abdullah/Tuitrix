@@ -69,7 +69,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
     if (!name.trim()) return;
 
     if (isNew) {
-      const isPro = isProUser(billingState, user?.email);
+      const isPro = isProUser(billingState, user?.email) || Boolean((state as any).isOwner);
       const activeBatchesCount = (state.batches || []).filter(b => b.active !== false).length;
       if (!canAddBatch(activeBatchesCount, isPro)) {
         toast(`Free tier is limited to ${FREE_TIER_MAX_BATCHES} active batches. Upgrade to Pro in Settings for unlimited batches.`, 'error');

@@ -27,6 +27,17 @@ tags: [changelog, history, releases]
 - Implemented `localPendingReq` state and unified `pendingReq` resolution in `SettingsView.tsx` to immediately transition the UI to the `⏳ Verification Tracker` view upon submitting an upgrade request before remote billing sync completes, with automatic clearing on user switch or Pro activation.
 - Computed deduplicated saved AI documents count on `SettingsView.tsx` bottom summary line combining `state.savedResources` and `state.docs` via `new Set(...)`.
 - Added unit tests in `src/tests/aiAndSettings.test.tsx` verifying numeric `proUntil` timestamp date formatting, instant Verification Tracker transition with submitted TrxID, and form input re-synchronization on state changes.
+- Synchronized `schedule` from `scheduleDays` and `scheduleTime` in `StudentModal.tsx` when a new student is saved with routine days without touching the default Saturday slot, preventing phantom Saturday routine slots.
+- Included `|| Boolean((state as any).isOwner)` in `isPro` across `StudentModal.tsx`, `BatchModal.tsx`, and `BulkStudentModal.tsx` for consistent owner access across modal tier checks.
+- Enabled automatic active monthly fee `Contract` creation in `BulkStudentModal.tsx` for imported students with specified tuition fees regardless of `Target Batch` assignment.
+- Enhanced `LessonModal.tsx` to automatically prefill `time` from the matching weekday slot in `b.schedule` or `b.scheduleTime` when opening a batch session without an explicit `initialTime`.
+- Hardened WhatsApp phone link formatting in `SettingsView.tsx` (`formatBdWhatsAppNumber`) and `HelpCenterView.tsx` to reject placeholder/short numbers (`< 10` digits), preventing broken `https://wa.me/017` links.
+- Added comprehensive unit tests in `src/tests/modalsAndReceipt.test.tsx` verifying `BulkStudentModal` batch fee contract creation, `StudentModal` schedule sync from `scheduleDays`, `LessonModal` batch time prefill, and placeholder WhatsApp number rejection.
+- Normalized 11-digit Bangladesh phone numbers (`01...`) with country code `88` in `PaymentReceiptModal.tsx` (`handleWhatsApp`) and replaced invalid `var(--text-muted)` design tokens with `var(--muted)`.
+- Enhanced `BatchFeeModal.tsx` promo code calculation to resolve discount value safely across `value`, `discountValue`, and `discountPercent` preventing `NaN`, and replaced invalid `var(--bg-card)` header style with `var(--card2)`.
+- Guarded `recordPayments` in `BatchFeeModal.tsx` to only record payments when `data.finalAmount > 0 || (data.originalAmount > 0 && data.discount > 0)`, skipping dummy `৳0` payment creations for students with `0` fee and `0` due.
+- Updated `contractLessons` lookup in `BatchFeeModal.tsx` to include unlinked lessons matching student ID (`l.contractId === d.contract!.id || (!l.contractId && l.studentId === sid)`), ensuring lessons logged prior to contract creation populate `lastClassDate` and `lastClassTopic` in reminder messages.
+- Added comprehensive unit tests in `src/tests/modalsAndReceipt.test.tsx` verifying `PaymentReceiptModal` BD WhatsApp normalization and `BatchFeeModal` promo code support across `discountPercent`/`discountValue` alongside `0`-amount payment skipping.
 
 ## [2026-11-13] — Deep Undefined Firestore Sanitization & Root Tutor Metadata Indexing
 - Applied `stripUndefinedDeep` sanitization across all Firestore `setDoc` payloads in `src/store/context.tsx` (owner billing sync, owner role sync, initial state migration/upload, and 250ms debounced sync) to prevent Firestore SDK `Unsupported field value: undefined` write errors.

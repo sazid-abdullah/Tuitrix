@@ -16,6 +16,7 @@ const CURRENCIES = ['৳', '₹', 'Rs ', '$', '£', '€', 'RM ', 'SAR '];
 export function formatBdWhatsAppNumber(raw?: string): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '');
+  if (digits.length < 10) return '';
   if (digits.length === 11 && digits.startsWith('01')) {
     return `88${digits}`;
   }

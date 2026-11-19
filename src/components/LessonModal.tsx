@@ -101,9 +101,18 @@ export const LessonModal: React.FC<LessonModalProps> = ({
         if (!subject && b.subjects?.[0]) {
           setSubject(b.subjects[0]);
         }
+
+        if (!lesson && !initialTime && (b.scheduleTime || b.schedule?.length)) {
+          const dayOfWeek = parseISO(date).getDay();
+          const matchingSlot = b.schedule?.find(s => s.day === dayOfWeek);
+          const targetTime = matchingSlot?.time || b.scheduleTime;
+          if (targetTime) {
+            setTime(targetTime);
+          }
+        }
       }
     }
-  }, [mode, batchId, state.batches, lesson]);
+  }, [mode, batchId, state.batches, lesson, initialTime, date]);
 
   const student = getStudent(studentId);
   const studentContractsList = state.contracts.filter(c => c.studentId === studentId);

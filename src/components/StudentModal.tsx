@@ -99,12 +99,32 @@ export const StudentModal: React.FC<StudentModalProps> = ({
     if (!name.trim()) return;
 
     if (isNew) {
-      const isPro = isProUser(billingState, user?.email);
+      const isPro = isProUser(billingState, user?.email) || Boolean((state as any).isOwner);
       const activeStudentsCount = state.students.filter(s => s.active !== false).length;
       if (!canAddStudent(activeStudentsCount, isPro)) {
         toast(`Free tier is limited to ${getFreeStudentLimit()} active students. Upgrade to Pro in Settings for unlimited students.`, 'error');
         return;
       }
+    }
+
+    let finalSchedule = schedule;
+    if (
+      scheduleDays.length > 0 &&
+      isNew &&
+      schedule.length === 1 &&
+      schedule[0].day === 6 &&
+      schedule[0].time === '17:00' &&
+      schedule[0].duration === 60 &&
+      !scheduleDays.includes('Sat')
+    ) {
+      const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      finalSchedule = scheduleDays
+        .filter(d => dayMap[d] !== undefined)
+        .map(d => ({
+          day: dayMap[d],
+          time: scheduleTime || '17:00',
+          duration: 60,
+        }));
     }
 
     const data: Omit<Student, 'id'> & { id?: string } = {
@@ -121,7 +141,7 @@ export const StudentModal: React.FC<StudentModalProps> = ({
       guardianPhone: guardianPhone.trim(),
       address: address.trim(),
       notes: notes.trim(),
-      schedule,
+      schedule: finalSchedule,
       scheduleDays,
       scheduleTime,
       active: student?.active !== false,

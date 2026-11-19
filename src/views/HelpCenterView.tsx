@@ -102,7 +102,9 @@ export const HelpCenterView: React.FC<HelpCenterViewProps> = ({ onNavigate }) =>
   ];
 
   const supportEmail = pricingConfig?.supportEmail || 'abdullahsazid109@gmail.com';
-  const rawWa = pricingConfig?.supportWhatsapp || pricingConfig?.bkashNumber || '01700000000';
+  const rawWa = [pricingConfig?.supportWhatsapp, pricingConfig?.bkashNumber, '01700000000'].find(
+    (n): n is string => Boolean(n && n.replace(/\D/g, '').length >= 10)
+  ) || '01700000000';
   const cleanedWa = rawWa.replace(/\D/g, '');
   const waPhone = cleanedWa.length === 11 && cleanedWa.startsWith('01') ? '88' + cleanedWa : cleanedWa;
   const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(

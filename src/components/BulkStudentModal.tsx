@@ -34,7 +34,7 @@ export const BulkStudentModal: React.FC<BulkStudentModalProps> = ({ isOpen, onCl
     e.preventDefault();
     if (parsedStudents.length === 0) return;
 
-    const isPro = isProUser(billingState, user?.email);
+    const isPro = isProUser(billingState, user?.email) || Boolean((state as any).isOwner);
     const maxFreeStudents = getFreeStudentLimit();
     const activeStudentsCount = state.students.filter(s => s.active !== false).length;
 
@@ -55,7 +55,7 @@ export const BulkStudentModal: React.FC<BulkStudentModalProps> = ({ isOpen, onCl
       newStudentIds.push(studentId);
 
 
-      if (data.fee !== undefined && !isNaN(data.fee) && !batchId) {
+      if (data.fee !== undefined && !isNaN(data.fee)) {
         saveContract({
           studentId,
           title: 'Monthly Fee',

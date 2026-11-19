@@ -47,7 +47,8 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
     const rawPhone = student.guardianPhone || student.phone || '';
     let url = `https://wa.me/`;
     if (rawPhone) {
-      const cleanPhone = rawPhone.replace(/[^0-9+]/g, '');
+      let cleanPhone = rawPhone.replace(/\D/g, '');
+      if (cleanPhone.length === 11 && cleanPhone.startsWith('01')) cleanPhone = '88' + cleanPhone;
       url += `${cleanPhone}`;
     }
     url += `?text=${generateWhatsAppMessage()}`;
@@ -82,7 +83,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
 
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: '0 0 5px 0' }}>{tutorName}</h2>
-          {brandTitle && <div style={{ color: 'var(--text-muted)' }}>{brandTitle}</div>}
+          {brandTitle && <div style={{ color: 'var(--muted)' }}>{brandTitle}</div>}
           <div style={{ fontWeight: 'bold', marginTop: '10px' }}>OFFICIAL TUITION FEE RECEIPT</div>
         </div>
 
@@ -108,7 +109,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
           <strong>{amountStr}</strong>
         </div>
         {payment.method && (
-          <div style={{ textAlign: 'right', fontSize: '0.9em', color: 'var(--text-muted)', marginTop: '5px' }}>
+          <div style={{ textAlign: 'right', fontSize: '0.9em', color: 'var(--muted)', marginTop: '5px' }}>
             via {payment.method}
           </div>
         )}

@@ -18,7 +18,7 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
   const [date, setDate] = useState(todayISO());
 
   const [promoInput, setPromoInput] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountType: 'flat' | 'percent'; value: number } | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
 
   useEffect(() => {
     setSelectedStudents(new Set());
@@ -60,10 +60,11 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
     let discount = 0;
 
     if (appliedPromo && finalAmount > 0) {
+      const promoVal = Number((appliedPromo as any).value ?? (appliedPromo as any).discountValue ?? (appliedPromo as any).discountPercent ?? 0);
       if (appliedPromo.discountType === 'percent') {
-        discount = finalAmount * (appliedPromo.value / 100);
+        discount = finalAmount * (promoVal / 100);
       } else {
-        discount = appliedPromo.value;
+        discount = promoVal;
       }
       finalAmount = Math.max(0, finalAmount - discount);
     }
@@ -100,7 +101,7 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
     let count = 0;
     for (const data of studentsData) {
       if (selectedStudents.has(data.student!.id)) {
-        if (data.finalAmount >= 0) {
+        if (data.finalAmount > 0 || (data.originalAmount > 0 && data.discount > 0)) {
           savePayment({
             studentId: data.student!.id,
             contractId: data.contract?.id || null,
@@ -143,7 +144,7 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
           </div>
           {appliedPromo && (
             <div className="small pos" style={{ marginTop: '4px' }}>
-              Applied: {appliedPromo.code} (-{appliedPromo.discountType === 'percent' ? `${appliedPromo.value}%` : money(appliedPromo.value)})
+              Applied: {appliedPromo.code} (-{appliedPromo.discountType === 'percent' ? `${Number((appliedPromo as any).value ?? (appliedPromo as any).discountPercent ?? (appliedPromo as any).discountValue ?? 0)}%` : money(Number((appliedPromo as any).value ?? (appliedPromo as any).discountValue ?? (appliedPromo as any).discountPercent ?? 0))})
             </div>
           )}
         </label>
@@ -155,7 +156,7 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}>
+              <tr style={{ background: 'var(--card2)', borderBottom: '1px solid var(--border)' }}>
                 <th style={{ padding: '8px', textAlign: 'left' }}>
                   <input
                     type="checkbox"
@@ -189,7 +190,7 @@ export const BatchFeeModal: React.FC<BatchFeeModalProps> = ({ isOpen, batch, onC
 
                    // find last class for this contract
                    const contractLessons = state.lessons
-                     .filter(l => l.studentId === sid && l.contractId === d.contract!.id && l.status === 'taught' && l.date <= date)
+                     .filter(l => l.studentId === sid && (l.contractId === d.contract!.id || (!l.contractId && l.studentId === sid)) && l.status === 'taught' && l.date <= date)
                      .sort((a,b) => (b.date + (b.time||'')).localeCompare(a.date + (a.time||'')));
 
                    if (contractLessons.length > 0) {
