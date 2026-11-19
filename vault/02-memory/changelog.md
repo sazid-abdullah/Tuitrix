@@ -7,6 +7,7 @@ tags: [changelog, history, releases]
 # 📜 Engineering Changelog
 
 ## [2026-11-14] — Unlinked Payment Attribution, Schedule Days Fallback, Students View Cycle Badges & Test Consolidation
+- Integrated Bulk WhatsApp Fee Reminder Queue in `MoneyView.tsx` (bilingual EN/BN toggle, custom payment notes, sequential send queue, copy action) with BD phone normalizer & reminder utilities in `src/utils/whatsapp.ts`, polished modals/settings, and test coverage in `src/tests/moneyReminderQueue.test.tsx` and `src/tests/whatsappReminder.test.ts`.
 - Updated `contractStatus` in `src/store/contracts.ts` to credit unlinked payments (`contractId: null` or falsy) matching `studentId` and contract date range (`p.date >= c.startDate && (!c.endDate || p.date <= c.endDate)`) up to today, accurately crediting batch fee and student payments.
 - Enhanced `expectedMonthlyFees` in `src/store/contracts.ts` to fall back to `weeklySlots = (s?.schedule?.length || s?.scheduleDays?.length || 0)` when estimating monthly tuition prior to 14 days of lesson history.
 - Enhanced `scheduleSummary` in `src/views/StudentsView.tsx` to format `scheduleDays` and `scheduleTime` when `schedule` array is empty (`${s.scheduleDays.join(', ')}${s.scheduleTime ? ' · ' + fmtTime(s.scheduleTime) : ''}`) before falling back to `'No fixed schedule'`.

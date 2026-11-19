@@ -34,3 +34,74 @@ export function generateWhatsAppMessage(props?: WhatsAppMessageProps): string {
 
   return `Assalamu Alaikum, ${studentName} has completed ${completedClasses}/${targetClasses} classes for the current cycle${lastClassTextEn}.${examTextEn} Total tuition fee due: ৳${dueAmount}. Thank you — ${tutorName}.`;
 }
+
+/**
+ * Normalizes phone numbers for WhatsApp API URLs.
+ * - Strips non-digits
+ * - Strips leading '00'
+ * - Prefixes 11-digit BD numbers ('01XXXXXXXXX') with '88'
+ * - Rejects numbers under 7 digits
+ */
+export function normalizeWhatsAppPhone(raw?: string): string {
+  if (!raw) return '';
+  let digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('00')) {
+    digits = digits.slice(2);
+  }
+  if (!digits || digits.length < 7) {
+    return '';
+  }
+  if (digits.startsWith('01') && digits.length === 11) {
+    return `88${digits}`;
+  }
+  return digits;
+}
+
+export interface FeeReminderProps {
+  studentName?: string;
+  contractTitle?: string;
+  dueAmount: number;
+  currency?: string;
+  owedSince?: string;
+  tutorName?: string;
+  paymentNote?: string;
+  lang?: 'en' | 'bn';
+}
+
+/**
+ * Generates a polite, concise WhatsApp fee reminder message in English or Bangla.
+ */
+export function generateFeeReminderMessage(props: FeeReminderProps): string {
+  const student = props.studentName?.trim() || 'Student';
+  const amount = Math.round(Number(props.dueAmount) || 0);
+  const currency = props.currency || '৳';
+  const tutor = props.tutorName?.trim() || 'Tutor';
+  const contract = props.contractTitle?.trim();
+  const owedSince = props.owedSince?.trim();
+  const note = props.paymentNote?.trim();
+  const lang = props.lang === 'bn' ? 'bn' : 'en';
+
+  if (lang === 'bn') {
+    const contractText = contract ? ` (${contract})` : '';
+    const owedText = owedSince ? ` (${owedSince} থেকে)` : '';
+    const noteText = note ? ` নোট: ${note}।` : '';
+    return `আসসালামু আলাইকুম, ${student}-এর${contractText} বকেয়া টিউশন ফি: ${currency}${amount}${owedText}।${noteText} অনুগ্রহ করে পরিশোধের ব্যবস্থা করলে উপকৃত হব। ধন্যবাদ — ${tutor}।`;
+  }
+
+  const contractText = contract ? ` (${contract})` : '';
+  const owedText = owedSince ? ` (due since ${owedSince})` : '';
+  const noteText = note ? ` Note: ${note}.` : '';
+  return `Assalamu Alaikum, this is a reminder for ${student}${contractText}. Tuition fee due: ${currency}${amount}${owedText}.${noteText} Thank you — ${tutor}.`;
+}
+
+/**
+ * Builds a direct or contact-picker WhatsApp URL with prefilled text.
+ */
+export function buildWhatsAppUrl(phone: string | undefined, message: string): string {
+  const norm = normalizeWhatsAppPhone(phone);
+  if (norm) {
+    return `https://wa.me/${norm}?text=${encodeURIComponent(message)}`;
+  }
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+

@@ -7,6 +7,7 @@ import { callAI, MONEY_SYSTEM, moneyPrompt, renderMarkdown } from '../services/a
 import { Payment, Expense, Goal } from '../types';
 import { isProUser } from '../utils/tierLimits';
 import { isOwnerEmail } from '../utils/auth';
+import { generateFeeReminderMessage, buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface MoneyViewProps {
   onNavigate: (route: string, param?: string) => void;
@@ -38,6 +39,37 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
   const [moneyAIResult, setMoneyAIResult] = useState<{ q: string; content: string } | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
 
+  const [reminderQueueOpen, setReminderQueueOpen] = useState(false);
+  const [reminderLang, setReminderLang] = useState<'en' | 'bn'>(() => {
+    try {
+      return localStorage.getItem('tuitrix_fee_reminder_lang') === 'bn' ? 'bn' : 'en';
+    } catch {
+      return 'en';
+    }
+  });
+  const [reminderPaymentNote, setReminderPaymentNote] = useState<string>(() => {
+    try {
+      return localStorage.getItem('tuitrix_fee_reminder_note') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [sentQueueIds, setSentQueueIds] = useState<Record<string, boolean>>({});
+
+  const handleReminderLangChange = (lang: 'en' | 'bn') => {
+    setReminderLang(lang);
+    try {
+      localStorage.setItem('tuitrix_fee_reminder_lang', lang);
+    } catch {}
+  };
+
+  const handleReminderNoteChange = (note: string) => {
+    setReminderPaymentNote(note);
+    try {
+      localStorage.setItem('tuitrix_fee_reminder_note', note);
+    } catch {}
+  };
+
   const pays = state.payments.filter(p => monthKey(p.date) === selectedMonth);
   const exps = state.expenses.filter(x => monthKey(x.date) === selectedMonth);
   const income = pays.reduce((a, p) => a + Number(p.amount || 0), 0);
@@ -51,6 +83,43 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
     }))
     .filter(x => x.st.balance > 0.005);
   const outstanding = dues.reduce((a, x) => a + x.st.balance, 0);
+
+  const sortedDues = [...dues].sort((a, b) => b.st.balance - a.st.balance);
+  const sentCount = sortedDues.filter(x => sentQueueIds[x.c.id]).length;
+
+  const buildReminderForDue = (item: (typeof dues)[number]) => {
+    return generateFeeReminderMessage({
+      studentName: item.s?.name || 'Student',
+      contractTitle: item.c?.title,
+      dueAmount: item.st?.balance ?? 0,
+      currency: state.settings?.currency || '৳',
+      owedSince: item.st?.owedSince ? fmtDate(item.st.owedSince, { day: 'numeric', month: 'short' }) : undefined,
+      tutorName: state.settings?.tutorName || 'Tutor',
+      paymentNote: reminderPaymentNote,
+      lang: reminderLang,
+    });
+  };
+
+  const handleSendReminder = (item: (typeof dues)[number]) => {
+    const msg = buildReminderForDue(item);
+    const url = buildWhatsAppUrl(item.s?.guardianPhone || item.s?.phone, msg);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setSentQueueIds(prev => ({ ...prev, [item.c.id]: true }));
+    toast(`Opened WhatsApp for ${item.s?.name || 'student'}`, 'success');
+  };
+
+  const handleCopyReminder = (item: (typeof dues)[number]) => {
+    const msg = buildReminderForDue(item);
+    navigator.clipboard?.writeText(msg);
+    toast('Reminder copied', 'info');
+  };
+
+  const handleSendNextUnsent = () => {
+    const next = sortedDues.find(x => !sentQueueIds[x.c.id]);
+    if (next) {
+      handleSendReminder(next);
+    }
+  };
 
   const activeContracts = state.contracts.filter(c => c.status !== 'ended');
 
@@ -572,39 +641,139 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
 
         {/* Who owes you */}
         <div className="card">
-          <h2>Who owes you</h2>
-          <div className="list">
-            {dues.length === 0 ? (
-              <div className="empty">Everyone is paid up!</div>
-            ) : (
-              dues
-                .sort((a, b) => b.st.balance - a.st.balance)
-                .map(({ c, st, s }) => (
-                  <div key={c.id} className="row">
-                    <a
-                      className="grow"
-                      href={`#/student/${s?.id}`}
-                      onClick={e => {
-                        e.preventDefault();
-                        if (s) onNavigate('student', s.id);
-                      }}
-                      style={{ color: 'inherit' }}
-                    >
-                      <div className="title">{s?.name}</div>
-                      <div className="meta">
-                        {c.title}
-                        {st.owedSince && ` · since ${fmtDate(st.owedSince, { day: 'numeric', month: 'short' })}`}
-                      </div>
-                    </a>
-                    <span className="neg nowrap">{money(st.balance)}</span>
+          <div className="card-head">
+            <h2>Who owes you</h2>
+            {sortedDues.length > 0 && (
+              <button
+                type="button"
+                className="btn sm ghost"
+                onClick={() => setReminderQueueOpen(v => !v)}
+              >
+                {reminderQueueOpen ? 'Hide Queue' : `WhatsApp Queue (${sortedDues.length})`}
+              </button>
+            )}
+          </div>
+
+          {reminderQueueOpen && sortedDues.length > 0 && (
+            <div
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '12px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="small muted">Language:</span>
+                  <div className="seg" style={{ display: 'inline-flex' }}>
                     <button
-                      className="btn sm"
-                      onClick={() => onRecordPayment({ studentId: s?.id, contractId: c.id })}
+                      type="button"
+                      className={`btn xs ${reminderLang === 'en' ? 'primary' : 'ghost'}`}
+                      onClick={() => handleReminderLangChange('en')}
                     >
-                      Paid
+                      EN
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn xs ${reminderLang === 'bn' ? 'primary' : 'ghost'}`}
+                      onClick={() => handleReminderLangChange('bn')}
+                    >
+                      BN
                     </button>
                   </div>
-                ))
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="small" style={{ fontWeight: 500 }}>
+                    Sent {sentCount} / {sortedDues.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn sm primary"
+                    onClick={handleSendNextUnsent}
+                    disabled={sentCount >= sortedDues.length}
+                  >
+                    Send Next
+                  </button>
+                  {sentCount > 0 && (
+                    <button
+                      type="button"
+                      className="btn sm ghost"
+                      onClick={() => setSentQueueIds({})}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="text"
+                  value={reminderPaymentNote}
+                  onChange={e => handleReminderNoteChange(e.target.value)}
+                  placeholder="Optional: bKash/Nagad number or payment note"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="list">
+            {sortedDues.length === 0 ? (
+              <div className="empty">Everyone is paid up!</div>
+            ) : (
+              sortedDues.map(({ c, st, s }) => (
+                <div key={c.id} className="row">
+                  <a
+                    className="grow"
+                    href={`#/student/${s?.id}`}
+                    onClick={e => {
+                      e.preventDefault();
+                      if (s) onNavigate('student', s.id);
+                    }}
+                    style={{ color: 'inherit' }}
+                  >
+                    <div className="title">{s?.name}</div>
+                    <div className="meta">
+                      {c.title}
+                      {st?.owedSince && ` · since ${fmtDate(st.owedSince, { day: 'numeric', month: 'short' })}`}
+                    </div>
+                  </a>
+                  <span className="neg nowrap">{money(st.balance)}</span>
+                  <button
+                    type="button"
+                    className="btn sm"
+                    onClick={() => onRecordPayment({ studentId: s?.id, contractId: c.id })}
+                  >
+                    Paid
+                  </button>
+                  <button
+                    type="button"
+                    className="btn sm ghost"
+                    onClick={() => handleSendReminder({ c, st, s })}
+                  >
+                    {sentQueueIds[c.id] ? '✓ Sent' : 'WhatsApp'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn sm ghost"
+                    onClick={() => handleCopyReminder({ c, st, s })}
+                  >
+                    Copy
+                  </button>
+                </div>
+              ))
             )}
           </div>
         </div>
