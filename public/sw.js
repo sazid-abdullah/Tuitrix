@@ -1,10 +1,12 @@
 // Network-first service worker for Tuitrix PWA
-const CACHE_NAME = 'tuitrix-v21';
+const CACHE_NAME = 'tuitrix-v22';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icons/icon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
   '/css/style.css',
 ];
 
@@ -12,7 +14,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then((cache) => Promise.allSettled(STATIC_ASSETS.map((url) => cache.add(url))))
       .then(() => self.skipWaiting())
   );
 });
@@ -43,7 +45,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Tuitrix Reminder';
   const options = {
     body: data.body || 'You have new notifications.',
-    icon: '/icons/icon.svg',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: data.tag || 'tuitrix-notification',
     vibrate: [200, 100, 200],
     data: data.url || '/'
@@ -75,12 +78,14 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET requests or external API calls
+  // Skip non-GET requests or external API calls, well-known assets, and SW itself
   if (
     event.request.method !== 'GET' ||
     url.origin !== self.location.origin ||
     url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/pay/')
+    url.pathname.startsWith('/pay/') ||
+    url.pathname.startsWith('/.well-known/') ||
+    url.pathname.endsWith('/sw.js')
   ) {
     return;
   }
@@ -89,7 +94,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
@@ -97,17 +102,16 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => {
-        return caches.match(event.request, { ignoreSearch: true }).then((cached) => {
-          if (cached) return cached;
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-          return new Response('Network error and asset not cached', {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: new Headers({ 'Content-Type': 'text/plain' }),
-          });
+      .catch(async () => {
+        const cached = await caches.match(event.request, { ignoreSearch: true });
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') {
+          return (await caches.match('/index.html')) || (await caches.match('/'));
+        }
+        return new Response('Network error and asset not cached', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: new Headers({ 'Content-Type': 'text/plain' }),
         });
       })
   );
