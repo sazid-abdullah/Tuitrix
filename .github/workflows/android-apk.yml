@@ -34,15 +34,36 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
-      - run: cd android && ./gradlew assembleDebug bundleRelease
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk tuitrix-latest.apk
+      - name: Build Android APK and Bundle
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/tuitrix-upload.jks"
+            cd android && ./gradlew assembleRelease bundleRelease \
+              -Pandroid.injected.signing.store.file="$RUNNER_TEMP/tuitrix-upload.jks" \
+              -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+              -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+              -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+            cd ..
+            cp android/app/build/outputs/apk/release/app-release.apk tuitrix-latest.apk
+          else
+            cd android && ./gradlew assembleDebug bundleRelease
+            cd ..
+            cp android/app/build/outputs/apk/debug/app-debug.apk tuitrix-latest.apk
+          fi
+      - name: Clean up Keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/tuitrix-upload.jks"
       - uses: actions/upload-artifact@v4
         with:
           name: Tuitrix-Android
           path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/bundle/release/app-release.aab
             tuitrix-latest.apk
+            android/app/build/outputs/bundle/release/app-release.aab
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'

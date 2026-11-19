@@ -25,5 +25,9 @@ describe('PWA Service Worker & GitHub Release Configuration', () => {
     expect(workflowContent).toContain('VITE_FIREBASE_API_KEY');
     expect(workflowContent).toContain('tuitrix-latest.apk');
     expect(workflowContent).toContain('softprops/action-gh-release@v2');
+    expect(workflowContent).toContain('ANDROID_KEYSTORE_BASE64');
+    expect(workflowContent).toContain('android.injected.signing.store.file');
+    expect(workflowContent).toContain('assembleRelease bundleRelease');
+    expect(workflowContent).toContain('rm -f "$RUNNER_TEMP/tuitrix-upload.jks"');
   });
 });
