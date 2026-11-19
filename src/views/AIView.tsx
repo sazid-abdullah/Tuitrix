@@ -23,6 +23,7 @@ import { SavedDoc, SavedAiResource } from '../types';
 import { isProUser, FREE_TIER_MAX_SAVED_RESOURCES, getDailyAiQuotaState, canSaveAiResource } from '../utils/tierLimits';
 import { isOwnerEmail, sanitizePlaceholder } from '../utils/auth';
 import { RewardedAdModal } from '../components/RewardedAdModal';
+import { BOARD_EXAM_PRESETS, BoardExamPreset } from '../utils/examPresets';
 
 interface AIViewProps {
   initialTool?: string;
@@ -132,6 +133,21 @@ export const AIView: React.FC<AIViewProps> = ({
   const [printDate, setPrintDate] = useState('');
   const [localShowHeader, setLocalShowHeader] = useState(state.profile?.showPrintHeader ?? true);
   const [localShowWatermark, setLocalShowWatermark] = useState(state.profile?.showPrintWatermark ?? true);
+  const [activePresetId, setActivePresetId] = useState<string>('');
+  const [localTwoColumnPrint, setLocalTwoColumnPrint] = useState<boolean>(false);
+
+  const applyBoardPreset = (preset: BoardExamPreset) => {
+    setActivePresetId(preset.id);
+    setCurriculum(preset.curriculum);
+    if (preset.grade) setGrade(preset.grade);
+    setExamFormat(preset.format);
+    setCqCount(preset.cqCount);
+    setCqAnswer(preset.cqAnswer);
+    setMcqCount(preset.mcqCount);
+    setDuration(preset.duration);
+    setNotes(preset.notes);
+    toast(`Applied preset: ${preset.label}`, 'info');
+  };
 
   // Unified hash listener on mount & hashchange for tool and student prefill
   useEffect(() => {
@@ -576,11 +592,17 @@ export const AIView: React.FC<AIViewProps> = ({
       .print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 9pt; color: #666; padding: 10px 0; border-top: 1px solid #ddd; }
       .content { padding-bottom: 40px; }
       .exam-fig { display: block; max-width: 280px; max-height: 180px; width: auto; height: auto; margin: 8px 0; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      ${localTwoColumnPrint ? `
+        .print-body { column-count: 2; column-gap: 18pt; column-rule: 1px solid #cbd5e1; font-size: 10.5pt; }
+        .print-body h2, .print-body h3 { break-after: avoid; column-span: all; }
+        .print-body table, .print-body .exam-fig, .print-body blockquote, .print-body pre { break-inside: avoid; }
+        .branded-header { column-span: all; }
+      ` : ''}
     </style></head><body>
       ${watermarkHtml}
       <div class="content">
         ${headerHtml}
-        ${renderMarkdown(md)}
+        <div class="${localTwoColumnPrint ? 'print-body' : ''}">${renderMarkdown(md)}</div>
       </div>
       ${footerHtml}
     </body></html>`);
@@ -982,6 +1004,24 @@ export const AIView: React.FC<AIViewProps> = ({
                     </button>
                   </div>
 
+                  <div style={{ marginBottom: '12px' }}>
+                    <div className="small muted" style={{ marginBottom: '6px', fontWeight: 600 }}>
+                      Quick Board Presets (NCTB)
+                    </div>
+                    <div className="chips">
+                      {BOARD_EXAM_PRESETS.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={`btn sm ${activePresetId === p.id ? 'primary' : 'ghost'}`}
+                          onClick={() => applyBoardPreset(p)}
+                        >
+                          {p.label} · {p.badge}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <label className="field">
                     Paper format
                     <select
@@ -1241,6 +1281,10 @@ export const AIView: React.FC<AIViewProps> = ({
                         <input type="checkbox" checked={localShowWatermark} onChange={e => setLocalShowWatermark(e.target.checked)} />
                         Show Watermark
                       </label>
+                      <label className="check">
+                        <input type="checkbox" checked={localTwoColumnPrint} onChange={e => setLocalTwoColumnPrint(e.target.checked)} />
+                        2-Column Board Print
+                      </label>
                     </div>
                   </div>
 
@@ -1412,6 +1456,10 @@ export const AIView: React.FC<AIViewProps> = ({
                   <label className="check">
                     <input type="checkbox" checked={localShowWatermark} onChange={e => setLocalShowWatermark(e.target.checked)} />
                     Show Watermark
+                  </label>
+                  <label className="check">
+                    <input type="checkbox" checked={localTwoColumnPrint} onChange={e => setLocalTwoColumnPrint(e.target.checked)} />
+                    2-Column Board Print
                   </label>
                 </div>
               </div>

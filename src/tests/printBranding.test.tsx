@@ -105,4 +105,49 @@ describe('Print Branding & Header Tests', () => {
     const printBtn = screen.getByText('Print');
     expect(printBtn).toBeInTheDocument();
   });
+
+  it('populates curriculum, counts, and board marks when clicking a board exam preset', () => {
+    render(<AIView initialTool="exam" onNavigate={vi.fn()} onStartExam={vi.fn()} onUploadPaper={vi.fn()} onImportDoc={vi.fn()} />);
+
+    const presetBtn = screen.getByText(/SSC Science \(75 Marks\)/i);
+    expect(presetBtn).toBeInTheDocument();
+
+    fireEvent.click(presetBtn);
+
+    // Curriculum input
+    expect(screen.getByPlaceholderText(/e.g. NCTB, Cambridge/i)).toHaveValue('NCTB (SSC)');
+
+    // CQ and MCQ counts
+    expect(screen.getByLabelText(/^CQ Count/i)).toHaveValue(8);
+    expect(screen.getByLabelText(/^MCQ Count/i)).toHaveValue(25);
+
+    // Total Board Marks
+    expect(screen.getByText(/Total Board Marks:\s*75/i)).toBeInTheDocument();
+  });
+
+  it('toggles 2-Column Board Print and writes column-count: 2 and class="print-body" into print iframe document', () => {
+    mockState.docs = [
+      { id: '1', type: 'exam', title: 'Test Exam', content: 'hello world', createdAt: new Date().toISOString() }
+    ];
+
+    render(<AIView initialTool="saved" onNavigate={vi.fn()} onStartExam={vi.fn()} onUploadPaper={vi.fn()} onImportDoc={vi.fn()} />);
+
+    // Click document to view modal
+    fireEvent.click(screen.getByText('Test Exam'));
+
+    const twoColToggle = screen.getByLabelText(/2-Column Board Print/i);
+    expect(twoColToggle).not.toBeChecked();
+
+    fireEvent.click(twoColToggle);
+    expect(twoColToggle).toBeChecked();
+
+    const printBtn = screen.getByText('Print');
+    fireEvent.click(printBtn);
+
+    const iframe = document.querySelector('iframe');
+    expect(iframe).toBeInTheDocument();
+    const iframeHtml = iframe?.contentDocument?.documentElement?.innerHTML || '';
+    expect(iframeHtml).toContain('column-count: 2');
+    expect(iframeHtml).toContain('class="print-body"');
+  });
 });
