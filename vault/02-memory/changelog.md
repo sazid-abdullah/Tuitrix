@@ -6,7 +6,8 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
-## [2026-11-20] — Sentry React 19 Crash Reporting & CI DSN Injection
+## [2026-11-20] — Sentry Crash Reporting & Pre-Launch Security Hardening
+- Integrated pre-launch Firestore Rules hardening (owner email verification, wildcard billing write isolation, pending-only upgrade requests), `ownerUid` share ownership (`src/services/firebase.ts`), print HTML escaping (`src/views/AIView.tsx`), and Markdown image URL validation (`src/services/ai.ts`).
 - Integrated `@sentry/react` React 19 error monitoring (`src/services/sentry.ts`, `src/main.tsx`) and `VITE_SENTRY_DSN` injection in both CI workflows (`.github/workflows/deploy.yml`, `.github/workflows/android-apk.yml`).
 
 ## [2026-11-14] — Unlinked Payment Attribution, Schedule Days Fallback, Students View Cycle Badges & Test Consolidation

@@ -18,7 +18,7 @@ import {
   AI_PROVIDERS,
   autoModel,
 } from '../services/ai';
-import { fmtDate, uid, todayISO } from '../utils/date';
+import { fmtDate, uid, todayISO, esc } from '../utils/date';
 import { SavedDoc, SavedAiResource } from '../types';
 import { isProUser, FREE_TIER_MAX_SAVED_RESOURCES, getDailyAiQuotaState, canSaveAiResource } from '../utils/tierLimits';
 import { isOwnerEmail, sanitizePlaceholder } from '../utils/auth';
@@ -560,15 +560,15 @@ export const AIView: React.FC<AIViewProps> = ({
 
       headerHtml = `
         <div class="branded-header" style="text-align:center; margin-bottom: 20px; border-bottom: 2px solid #222; padding-bottom: 12px;">
-          <h1 style="margin:0; font-size:18pt;">${brandTitleStr}</h1>
-          ${attribution ? `<div style="font-size:11pt; color:#444; margin-top:4px;">${attribution}</div>` : ''}
+          <h1 style="margin:0; font-size:18pt;">${esc(brandTitleStr)}</h1>
+          ${attribution ? `<div style="font-size:11pt; color:#444; margin-top:4px;">${esc(attribution)}</div>` : ''}
           <div style="display:flex; justify-content:space-between; margin-top:16px; font-size:11pt;">
             <span><strong>Student Name:</strong> ______________________</span>
-            <span><strong>Date:</strong> ${printDate || '__________'}</span>
+            <span><strong>Date:</strong> ${esc(printDate || '__________')}</span>
           </div>
           <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:11pt;">
-            <span><strong>Time Allowed:</strong> ${printTime || '__________'}</span>
-            <span><strong>Total Marks:</strong> ${printMarks || '__________'}</span>
+            <span><strong>Time Allowed:</strong> ${esc(printTime || '__________')}</span>
+            <span><strong>Total Marks:</strong> ${esc(printMarks || '__________')}</span>
           </div>
         </div>
       `;
@@ -576,12 +576,12 @@ export const AIView: React.FC<AIViewProps> = ({
 
     if (localShowWatermark) {
       const wmText = sanitizePlaceholder(state.profile?.brandTitle) || state.settings.tutorName || 'Tuitrix';
-      watermarkHtml = `<div class="watermark">${wmText}</div>`;
-      footerHtml = `<div class="print-footer">Prepared by ${tutorNameStr || 'Tutor'} &bull; Powered by Tuitrix</div>`;
+      watermarkHtml = `<div class="watermark">${esc(wmText)}</div>`;
+      footerHtml = `<div class="print-footer">Prepared by ${esc(tutorNameStr || 'Tutor')} &bull; Powered by Tuitrix</div>`;
     }
 
     doc.open();
-    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
       @page { margin: 12mm; }
       body { font:12pt/1.5 'Segoe UI','Noto Sans Bengali',Arial,sans-serif; color:#111; margin:0; position:relative; min-height: 100vh; }
       h2{font-size:16pt;margin:14pt 0 6pt}h3{font-size:13pt;margin:12pt 0 4pt}h4,h5{font-size:12pt;margin:10pt 0 4pt}

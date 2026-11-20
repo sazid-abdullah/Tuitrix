@@ -678,6 +678,9 @@ export async function publishSharedExamResult(
 
   if (db && auth?.currentUser) {
     try {
+      if (auth.currentUser.uid) {
+        (payload as any).ownerUid = auth.currentUser.uid;
+      }
       await setDoc(doc(db, 'shared_results', attempt.id), payload);
     } catch (e) {
       console.error('Failed to publish shared exam result to Firestore:', e);
@@ -735,6 +738,9 @@ export async function publishSharedParentPortal(
 
   if (db && auth?.currentUser) {
     try {
+      if (auth.currentUser.uid) {
+        (clean as any).ownerUid = auth.currentUser.uid;
+      }
       await setDoc(doc(db, 'shared_portals', portalId), clean);
     } catch (e) {
       console.error('Failed to publish shared parent portal to Firestore:', e);

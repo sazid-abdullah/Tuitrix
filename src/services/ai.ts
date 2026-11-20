@@ -550,7 +550,13 @@ export function renderMarkdown(md: string): string {
 
   const inline = (s: string) =>
     s
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="exam-fig" style="max-width:100%;margin:8px 0;" />')
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, url) => {
+        const trimmedUrl = (url || '').trim();
+        if (trimmedUrl.startsWith('data:image/') || trimmedUrl.startsWith('https://')) {
+          return `<img src="${trimmedUrl}" alt="${alt}" class="exam-fig" style="max-width:100%;margin:8px 0;" />`;
+        }
+        return alt;
+      })
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
