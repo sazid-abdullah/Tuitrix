@@ -6,7 +6,8 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
-## [2026-11-20] — Sentry Crash Reporting & Pre-Launch Security Hardening
+## [2026-11-20] — Sentry Crash Reporting, Security Hardening & Android Launch Polish
+- Added custom Android adaptive launcher icon generation via `@capacitor/assets` in `android-apk.yml` and native WebView auth guard in `AuthModal.tsx` with timeout protection and Email/Password guidance.
 - Integrated pre-launch Firestore Rules hardening (owner email verification, wildcard billing write isolation, pending-only upgrade requests), `ownerUid` share ownership (`src/services/firebase.ts`), print HTML escaping (`src/views/AIView.tsx`), and Markdown image URL validation (`src/services/ai.ts`).
 - Integrated `@sentry/react` React 19 error monitoring (`src/services/sentry.ts`, `src/main.tsx`) and `VITE_SENTRY_DSN` injection in both CI workflows (`.github/workflows/deploy.yml`, `.github/workflows/android-apk.yml`).
 

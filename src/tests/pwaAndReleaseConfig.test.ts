@@ -39,6 +39,9 @@ describe('PWA Service Worker & GitHub Release Configuration', () => {
     expect(workflowContent).toContain('android.injected.signing.store.file');
     expect(workflowContent).toContain('assembleRelease bundleRelease');
     expect(workflowContent).toContain('rm -f "$RUNNER_TEMP/tuitrix-upload.jks"');
+    expect(workflowContent).toContain('Generate Android App Icons');
+    expect(workflowContent).toContain('npx @capacitor/assets generate --android');
+    expect(workflowContent).toContain('ic_launcher_background.xml');
   });
 
   it('verifies initSentry safely returns false when VITE_SENTRY_DSN is unset', () => {

@@ -106,6 +106,32 @@ describe('AuthModal Forgot Password Flow', () => {
       expect(screen.getByText('Password reset email sent! Please check your inbox (and spam folder).')).toBeInTheDocument();
     });
   });
+
+  it('hides Google sign-in and shows Android note when running in native Capacitor Android', () => {
+    const originalCapacitor = (window as any).Capacitor;
+    (window as any).Capacitor = { isNativePlatform: () => true };
+
+    try {
+      render(<AuthModal isOpen={true} onClose={() => {}} />);
+      expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument();
+      expect(screen.getByText(/Using the Android app\? Sign in with Email & Password/i)).toBeInTheDocument();
+    } finally {
+      (window as any).Capacitor = originalCapacitor;
+    }
+  });
+
+  it('shows Google sign-in when running on web', () => {
+    const originalCapacitor = (window as any).Capacitor;
+    delete (window as any).Capacitor;
+
+    try {
+      render(<AuthModal isOpen={true} onClose={() => {}} />);
+      expect(screen.getByText('Continue with Google')).toBeInTheDocument();
+      expect(screen.queryByText(/Using the Android app\?/i)).not.toBeInTheDocument();
+    } finally {
+      (window as any).Capacitor = originalCapacitor;
+    }
+  });
 });
 
 describe('Navbar Sync Status Badge', () => {
