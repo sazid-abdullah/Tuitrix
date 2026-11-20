@@ -6,6 +6,9 @@ tags: [changelog, history, releases]
 
 # 📜 Engineering Changelog
 
+## [2026-11-20] — Sentry React 19 Crash Reporting & CI DSN Injection
+- Integrated `@sentry/react` React 19 error monitoring (`src/services/sentry.ts`, `src/main.tsx`) and `VITE_SENTRY_DSN` injection in both CI workflows (`.github/workflows/deploy.yml`, `.github/workflows/android-apk.yml`).
+
 ## [2026-11-14] — Unlinked Payment Attribution, Schedule Days Fallback, Students View Cycle Badges & Test Consolidation
 - Added conditional Play Store keystore signing for release AAB and APK builds in `android-apk.yml` with post-build keystore cleanup.
 - Hardened Service Worker v22 with resilient asset precaching, PNG push notification icons, foreground SW update checks in `main.tsx`, and automated GitHub Releases APK publishing in CI.

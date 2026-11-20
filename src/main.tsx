@@ -1,9 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { initSentry, getReactRootErrorHandlers } from './services/sentry';
 import { StoreProvider } from './store/context';
 import { App } from './App';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+initSentry();
+
+ReactDOM.createRoot(document.getElementById('root')!, getReactRootErrorHandlers()).render(
   <React.StrictMode>
     <StoreProvider>
       <App />
